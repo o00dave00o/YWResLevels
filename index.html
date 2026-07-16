@@ -1,1 +1,278 @@
-hi
+import json
+import pandas as pd
+import requests
+
+
+def fetch_reservoir_data():
+    """Fetches Yorkshire Water 2025 reservoir levels from the Stream Portal (ArcGIS FeatureServer)"""
+    query_url = (
+        "https://services1.arcgis.com/978Xf90BNo1T3UeG/arcgis/rest/services/"
+        "Yorkshire_Water_Reservoir_Levels_2025/FeatureServer/0/query"
+    )
+
+    params = {
+        "where": "1=1",
+        "outFields": "RESERVOIR_NAME,DATE,CAPACITY,CURRENT_LEVEL,CURRENT_PERCENTAGE",
+        "f": "json",
+        "resultOffset": 0,
+        "resultRecordCount": 2000,  # Max allowed per request
+    }
+
+    all_features = []
+    print("Fetching reservoir data from Stream Portal...")
+
+    while True:
+        response = requests.get(query_url, params=params)
+        if response.status_code != 200:
+            print(f"Error: {response.status_code}")
+            break
+
+        data = response.json()
+        features = data.get("features", [])
+        if not features:
+            break
+
+        all_features.extend(features)
+        if len(features) < params["resultRecordCount"]:
+            break
+        params["resultOffset"] += len(features)
+
+    if not all_features:
+        raise ValueError("No data returned from the server.")
+
+    # Convert Esri attributes to a DataFrame
+    df = pd.DataFrame([f["attributes"] for f in all_features])
+    df["DATE"] = pd.to_datetime(df["DATE"], unit="ms")
+    df.columns = [col.lower() for col in df.columns]
+
+    return df
+
+
+def generate_interactive_html(df, output_filename="reservoir_dashboard.html"):
+    """Aggregates data by month and writes a responsive interactive HTML dashboard."""
+    print("Processing and aggregating data...")
+
+    # Create helper columns for monthly grouping
+    df["year_month"] = df["date"].dt.strftime("%Y-%m")
+    df["month_name"] = df["date"].dt.strftime("%b %Y")
+
+    # Group by reservoir and month to get average levels
+    monthly_grouped = (
+        df.groupby(["reservoir_name", "year_month", "month_name"])
+        .agg(
+            {
+                "current_level": "mean",
+                "current_percentage": "mean",
+                "capacity": "max",  # Capacity doesn't usually change, but max is safe
+            }
+        )
+        .reset_index()
+        .sort_values(by=["reservoir_name", "year_month"])
+    )
+
+    # Format values for neat presentation
+    monthly_grouped["current_level"] = monthly_grouped["current_level"].round(2)
+    monthly_grouped["current_percentage"] = monthly_grouped[
+        "current_percentage"
+    ].round(1)
+
+    # Build an nested dictionary of reservoirs -> monthly lists of data
+    reservoir_data_dict = {}
+    for res_name, group in monthly_grouped.groupby("reservoir_name"):
+        reservoir_data_dict[res_name] = {
+            "capacity": int(group["capacity"].iloc[0]),
+            "months": group["month_name"].tolist(),
+            "percentages": group["current_percentage"].tolist(),
+            "levels": group["current_level"].tolist(),
+        }
+
+    # Serialize dataset to JSON for integration into the HTML document
+    json_data = json.dumps(reservoir_data_dict, indent=2)
+
+    # HTML/JS template structure
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UK Reservoir Monthly Levels</title>
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for beautiful interactive graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen font-sans">
+
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="mb-8 border-b border-slate-200 pb-5">
+            <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">UK Reservoir Levels Dashboard</h1>
+            <p class="text-slate-500 mt-2">Active monthly monitoring compiled via Stream Open Data Portal.</p>
+        </header>
+
+        <!-- Selector Section -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+                <label for="res-selector" class="block text-sm font-semibold text-slate-600 mb-1">Select a Reservoir</label>
+                <select id="res-selector" class="w-full sm:w-72 bg-slate-50 border border-slate-200 text-slate-800 py-2.5 px-4 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium cursor-pointer transition">
+                    <!-- Dropdown populated dynamically -->
+                </select>
+            </div>
+            <div class="flex gap-6">
+                <div>
+                    <span class="block text-xs uppercase tracking-wider font-bold text-slate-400">Total Capacity</span>
+                    <span id="capacity-val" class="text-2xl font-bold text-slate-900">-</span> <span class="text-xs text-slate-500 font-semibold">mÂ³</span>
+                </div>
+                <div>
+                    <span class="block text-xs uppercase tracking-wider font-bold text-slate-400">Current Average</span>
+                    <span id="latest-pct" class="text-2xl font-bold text-blue-600">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grid Layout for Chart & Table -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Chart Card (Takes 2/3 space) -->
+            <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h3 class="text-lg font-bold text-slate-900 mb-4">Historical Storage Trend (%)</h3>
+                <div class="relative h-96 w-full">
+                    <canvas id="reservoirChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Table Card (Takes 1/3 space) -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col h-full">
+                <h3 class="text-lg font-bold text-slate-900 mb-4">Monthly Breakdown</h3>
+                <div class="overflow-y-auto flex-1 pr-1 max-h-96">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase">
+                                <th class="pb-3">Month</th>
+                                <th class="pb-3 text-right">Avg Level (m)</th>
+                                <th class="pb-3 text-right">Capacity %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="text-sm font-medium text-slate-600 divide-y divide-slate-50">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Raw Data injected directly into script environment -->
+    <script>
+        const reservoirData = {json_data};
+        let chartInstance = null;
+
+        const selector = document.getElementById('res-selector');
+        const capacityVal = document.getElementById('capacity-val');
+        const latestPct = document.getElementById('latest-pct');
+        const tableBody = document.getElementById('table-body');
+        const ctx = document.getElementById('reservoirChart').getContext('2d');
+
+        // Populate Dropdown Options
+        const sortedReservoirs = Object.keys(reservoirData).sort();
+        sortedReservoirs.forEach(name => {{
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            selector.appendChild(opt);
+        }});
+
+        function updateDashboard(resName) {{
+            const data = reservoirData[resName];
+            
+            // 1. Update KPI Values
+            capacityVal.textContent = Number(data.capacity).toLocaleString();
+            
+            const lastPercentage = data.percentages[data.percentages.length - 1];
+            latestPct.textContent = lastPercentage ? lastPercentage + '%' : 'N/A';
+
+            // 2. Re-Render Chart.js Instance
+            if (chartInstance) {{
+                chartInstance.destroy();
+            }}
+
+            chartInstance = new Chart(ctx, {{
+                type: 'line',
+                data: {{
+                    labels: data.months,
+                    datasets: [{{
+                        label: 'Water Capacity %',
+                        data: data.percentages,
+                        borderColor: '#2563eb', // Indigo / Tailwind Blue-600
+                        backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                        fill: true,
+                        tension: 0.35,
+                        borderWidth: 3,
+                        pointRadius: 4,
+                        pointHoverRadius: 7,
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{
+                        legend: {{ display: false }},
+                        tooltip: {{
+                            padding: 12,
+                            backgroundColor: '#1e293b',
+                            titleFont: {{ size: 14, weight: 'bold' }},
+                            bodyFont: {{ size: 13 }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            min: 0,
+                            max: 100,
+                            ticks: {{ callback: value => value + '%' }},
+                            grid: {{ color: '#f1f5f9' }}
+                        }},
+                        x: {{
+                            grid: {{ display: false }}
+                        }}
+                    }}
+                }}
+            }});
+
+            // 3. Update Monthly Summary Table
+            tableBody.innerHTML = '';
+            // Render table reversed (latest months at the top)
+            for (let i = data.months.length - 1; i >= 0; i--) {{
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition-colors';
+                tr.innerHTML = `
+                    <td class="py-3 font-semibold text-slate-800">${{data.months[i]}}</td>
+                    <td class="py-3 text-right text-slate-500">${{data.levels[i] !== null ? data.levels[i] + 'm' : 'N/A'}}</td>
+                    <td class="py-3 text-right font-bold text-blue-600">${{data.percentages[i]}}%</td>
+                `;
+                tableBody.appendChild(tr);
+            }}
+        }
+
+        // Event listener for dropdown interactions
+        selector.addEventListener('change', (e) => updateDashboard(e.target.value));
+
+        // Initialize with the first alphabetically sorted reservoir
+        if(sortedReservoirs.length > 0) {{
+            updateDashboard(sortedReservoirs[0]);
+        }}
+    </script>
+</body>
+</html>
+"""
+
+    with open(output_filename, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+    print(f"Interactive dashboard successfully built and saved to: {output_filename}")
+
+
+if __name__ == "__main__":
+    try:
+        raw_df = fetch_reservoir_data()
+        generate_interactive_html(raw_df)
+    except Exception as e:
+     print(f"\nAn error occurred: {e}")
