@@ -16,8 +16,13 @@
                 <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Yorkshire Water Reservoir Levels Dashboard</h1>
                 <p class="text-slate-500 mt-2">Active monthly monitoring compiled via Stream Open Data Portal.</p>
             </div>
-            <div id="status-badge" class="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 animate-pulse">
-                Connecting to ArcGIS Live Feed...
+            <div class="flex gap-2">
+                <button onclick="forceMockData()" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-200 hover:bg-slate-300 transition text-slate-700">
+                    Force Demo Data
+                </button>
+                <div id="status-badge" class="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 animate-pulse">
+                    Connecting to ArcGIS Live Feed...
+                </div>
             </div>
         </header>
 
@@ -144,7 +149,7 @@
         const masterDirectoryBody = document.getElementById('master-directory-rows');
         const ctx = document.getElementById('reservoirChart').getContext('2d');
 
-        // ArcGIS Open Data Parameters[cite: 2]
+        // Live API Configuration[cite: 2]
         const QUERY_URL = "https://services-eu1.arcgis.com/1WqkK5cDKUbF0CkH/arcgis/rest/services/Yorkshire%20Water%20Reservoir%20Levels%202026/FeatureServer/0/query";
         const OUT_FIELDS = "RESERVOIR_NAME,DATE,CAPACITY,CURRENT_LEVEL,CURRENT_PERCENTAGE,LATITUDE,LONGITUDE";
         const LIMIT_PER_REQUEST = 2000;
@@ -178,16 +183,23 @@
                     offset += features.length;
                 }
 
-                if (allFeatures.length === 0) throw new Error("No data returned from telemetry server.");
+                // If the response is empty, do not fail silently—throw to the catch fallback![cite: 2]
+                if (allFeatures.length === 0) {
+                    throw new Error("No entries returned from the API server.");
+                }
                 
                 updateStatusBadge("Live API Connected", "bg-emerald-100 text-emerald-800");
                 processAndAggregateData(allFeatures);
 
             } catch (err) {
-                console.warn("API Call Failed. Falling back to local offline simulation. Error: ", err);
-                updateStatusBadge("Offline - Using Mock Data", "bg-rose-100 text-rose-800");
-                processAndAggregateData(MOCK_RECORDS);
+                console.warn("API Call Failed. Falling back to demo mock data. Error: ", err);
+                forceMockData();
             }
+        }
+
+        function forceMockData() {
+            updateStatusBadge("Demo Mode (Mock Data)", "bg-rose-100 text-rose-800");
+            processAndAggregateData(MOCK_RECORDS);
         }
 
         function updateStatusBadge(text, bgClass) {
@@ -197,7 +209,6 @@
         }
 
         function processAndAggregateData(records) {
-            // Normalize columns to lowercase matching the Python script[cite: 2]
             const df = records.map(r => ({
                 reservoir_name: r.RESERVOIR_NAME || r.reservoir_name,
                 date: new Date(r.DATE || r.date),
@@ -208,11 +219,10 @@
                 longitude: r.LONGITUDE || r.longitude || null
             }));
 
-            // Month Formatters
             const getYearMonth = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
             const getMonthName = d => d.toLocaleDateString([], { month: 'short', year: 'numeric' });
 
-            // 1. Group by Reservoir & Year-Month for historical trend calculations[cite: 2]
+            // Group by Reservoir & Month[cite: 2]
             const historicalGroup = {};
             df.forEach(row => {
                 const resName = row.reservoir_name;
@@ -232,7 +242,7 @@
                 historicalGroup[resName][ym].percentages.push(row.current_percentage);
             });
 
-            // Flatten and group historical structures[cite: 2]
+            // Map variables[cite: 2]
             reservoirData = {};
             Object.keys(historicalGroup).sort().forEach(resName => {
                 const monthsSorted = Object.keys(historicalGroup[resName]).sort();
@@ -250,7 +260,7 @@
                 };
             });
 
-            // 2. Identify the absolute latest record for each unique reservoir[cite: 2]
+            // Find latest reading for KPI computations[cite: 2]
             const latestRecordsMap = {};
             df.forEach(row => {
                 const currentStored = latestRecordsMap[row.reservoir_name];
@@ -261,7 +271,6 @@
 
             const latestList = Object.values(latestRecordsMap);
 
-            // Calculate network summary metrics[cite: 2]
             let totalMaxCapacity = 0;
             let totalCurrentReserves = 0;
 
@@ -273,13 +282,13 @@
 
             const totalPercentage = totalMaxCapacity > 0 ? (totalCurrentReserves / totalMaxCapacity) * 100 : 0;[cite: 2]
 
-            // Apply Network KPI values to DOM[cite: 2]
+            // Apply to KPI Cards[cite: 2]
             document.getElementById('metric-max-capacity').innerText = totalMaxCapacity.toLocaleString([], {maximumFractionDigits:0});
             document.getElementById('metric-current-volume').innerText = totalCurrentReserves.toLocaleString([], {maximumFractionDigits:0});
             document.getElementById('metric-total-percentage').innerText = totalPercentage.toFixed(1) + '%';
             document.getElementById('metric-progress-bar').style.width = `${totalPercentage}%`;
 
-            // 3. Build Selector List[cite: 2]
+            // Setup Selector Options[cite: 2]
             selector.innerHTML = '';
             const sortedReservoirs = Object.keys(reservoirData).sort();[cite: 2]
             sortedReservoirs.forEach(name => {
@@ -290,7 +299,7 @@
             });
             selector.removeAttribute('disabled');
 
-            // 4. Build Master Directory HTML rows ordered by capacity descending[cite: 2]
+            // Construct Directory Table[cite: 2]
             const sortedDirectory = latestList.sort((a,b) => b.capacity - a.capacity);[cite: 2]
             masterDirectoryBody.innerHTML = '';
             sortedDirectory.forEach(row => {
@@ -318,7 +327,7 @@
                 masterDirectoryBody.appendChild(tr);
             });
 
-            // Reveal canvas and trigger setup
+            // Reveal interactive items
             document.getElementById('chart-loader').classList.add('hidden');
             document.getElementById('reservoirChart').classList.remove('hidden');
 
@@ -395,7 +404,7 @@
 
         selector.addEventListener('change', (e) => updateDashboard(e.target.value));[cite: 2]
 
-        // Initialize script
+        // Trigger startup query
         fetchReservoirData();
     </script>
 </body>
