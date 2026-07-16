@@ -603,74 +603,301 @@
         }
 
         // Draw selection to dashboard components
-        function updateDashboard(resName) {
-            const dom = getDOMElements();
-            const data = reservoirData[resName];[cite: 2]
-            if (!data) return;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reservoir Levels Dashboard</title>
+    <style>
+        /* Pure, standard CSS - No external frameworks required */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        header {
+            border-b: 1px solid #e2e8f0;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: 28px;
+            color: #0f172a;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        .card-dark {
+            background: #1e293b;
+            color: white;
+        }
+        .metric-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+            color: #64748b;
+        }
+        .card-dark .metric-label {
+            color: #94a3b8;
+        }
+        .metric-value {
+            font-size: 32px;
+            font-weight: 800;
+            margin-top: 10px;
+        }
+        .selector-box {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 30px;
+        }
+        select {
+            padding: 10px 15px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            width: 100%;
+            max-width: 300px;
+            font-weight: 600;
+        }
+        /* Custom CSS Bar Chart (No JS libraries needed!) */
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 30px;
+        }
+        .chart-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+        .bar-group {
+            margin-bottom: 15px;
+        }
+        .bar-label {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .bar-bg {
+            background: #e2e8f0;
+            height: 24px;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+        .bar-fill {
+            background: #2563eb;
+            height: 100%;
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+        /* Table styles */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+        }
+        th {
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        tr {
+            border-bottom: 1px solid #f1f5f9;
+        }
+        tr:last-child {
+            border-bottom: none;
+        }
+        .badge {
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
 
-            dom.capacityVal.textContent = Number(data.capacity).toLocaleString();[cite: 2]
-            
-            const lastPercentage = data.percentages[data.percentages.length - 1];[cite: 2]
-            dom.latestPct.textContent = lastPercentage ? lastPercentage + '%' : 'N/A';[cite: 2]
+    <div class="container">
+        <header>
+            <h1>Yorkshire Water Reservoir Dashboard</h1>
+            <p style="color: #64748b; margin: 0;">Local Demo Mode (Running Offline)</p>
+        </header>
 
-            // Safe Canvas initialization checks
-            if (chartInstance) {
-                chartInstance.destroy();[cite: 2]
-            }
+        <!-- KPI Cards -->
+        <div class="grid">
+            <div class="card card-dark">
+                <div class="metric-label">Total Network Capacity</div>
+                <div class="metric-value" id="kpi-capacity">--</div>
+            </div>
+            <div class="card">
+                <div class="metric-label">Current Water Stored</div>
+                <div class="metric-value" id="kpi-stored" style="color: #0f172a;">--</div>
+            </div>
+            <div class="card">
+                <div class="metric-label">Overall Network Level</div>
+                <div class="metric-value" id="kpi-pct" style="color: #2563eb;">--%</div>
+            </div>
+        </div>
 
-            const ctx = dom.canvas.getContext('2d');
-            chartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.months,[cite: 2]
-                    datasets: [{
-                        label: 'Water Capacity %',
-                        data: data.percentages,[cite: 2]
-                        borderColor: '#2563eb',[cite: 2]
-                        backgroundColor: 'rgba(37, 99, 235, 0.08)',[cite: 2]
-                        fill: true,[cite: 2]
-                        tension: 0.35,[cite: 2]
-                        borderWidth: 3,[cite: 2]
-                        pointRadius: 4,[cite: 2]
-                        pointHoverRadius: 7,[cite: 2]
-                    }]
-                },
-                options: {
-                    responsive: true,[cite: 2]
-                    maintainAspectRatio: false,[cite: 2]
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            min: 0,[cite: 2]
-                            max: 100,[cite: 2]
-                            ticks: { callback: value => value + '%' }
-                        }
-                    }
-                }
+        <!-- Selector Panel -->
+        <div class="selector-box">
+            <label style="display: block; font-weight: 600; margin-bottom: 8px;" for="res-select">Choose a Reservoir:</label>
+            <select id="res-select">
+                <!-- Populated dynamically -->
+            </select>
+        </div>
+
+        <!-- CSS Bar Chart Component -->
+        <div class="chart-container">
+            <div class="chart-title" id="chart-header">Monthly Storage Trends</div>
+            <div id="chart-bars">
+                <!-- Bar elements will be placed here by JS -->
+            </div>
+        </div>
+
+        <!-- Data Directory Table -->
+        <div class="chart-container" style="padding: 0; overflow-x: auto;">
+            <div style="padding: 20px; font-weight: 700; font-size: 18px; border-bottom: 1px solid #e2e8f0;">Reservoir Directory</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Reservoir Name</th>
+                        <th>Capacity</th>
+                        <th>Current Level</th>
+                    </tr>
+                </thead>
+                <tbody id="directory-table">
+                    <!-- Rows populated dynamically -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Self-contained static database[cite: 2]
+        const DATABASE = [
+            { name: "GRIMWITH IRE", capacity: 21764, percentage: 98.0, months: ["Jan 2026", "Feb 2026", "Mar 2026"], levels: [95, 96, 98] },
+            { name: "ECCUP ESR", capacity: 7009, percentage: 87.0, months: ["Jan 2026", "Feb 2026", "Mar 2026"], levels: [85, 86, 87] },
+            { name: "SCAR HOUSE", capacity: 10200, percentage: 91.2, months: ["Jan 2026", "Feb 2026", "Mar 2026"], levels: [88, 90, 91.2] },
+            { name: "FEWSTON", capacity: 3800, percentage: 76.5, months: ["Jan 2026", "Feb 2026", "Mar 2026"], levels: [72, 74, 76.5] }
+        ];
+
+        const selectEl = document.getElementById("res-select");
+        const chartBarsEl = document.getElementById("chart-bars");
+        const tableBodyEl = document.getElementById("directory-table");
+
+        function init() {
+            // 1. Calculate Network Metrics
+            let totalCap = 0;
+            let totalStored = 0;
+
+            DATABASE.forEach(res => {
+                totalCap += res.capacity;
+                totalStored += (res.capacity * (res.percentage / 100));[cite: 2]
             });
 
-            dom.tableBody.innerHTML = '';[cite: 2]
-            for (let i = data.months.length - 1; i >= 0; i--) {[cite: 2]
-                const tr = document.createElement('tr');
-                tr.className = 'hover:bg-slate-50 transition-colors';[cite: 2]
+            const totalPct = (totalStored / totalCap) * 100;[cite: 2]
+
+            document.getElementById("kpi-capacity").innerText = Math.round(totalCap).toLocaleString() + " m³";
+            document.getElementById("kpi-stored").innerText = Math.round(totalStored).toLocaleString() + " m³";
+            document.getElementById("kpi-pct").innerText = totalPct.toFixed(1) + "%";
+
+            // 2. Populate Dropdown Select options
+            selectEl.innerHTML = "";
+            DATABASE.forEach(res => {
+                const opt = document.createElement("option");
+                opt.value = res.name;
+                opt.textContent = res.name;
+                selectEl.appendChild(opt);
+            });
+
+            // 3. Populate Directory Table
+            tableBodyEl.innerHTML = "";
+            DATABASE.forEach(res => {
+                const tr = document.createElement("tr");
                 tr.innerHTML = `
-                    <td class="py-3 font-semibold text-slate-800">${data.months[i]}</td>
-                    <td class="py-3 text-right text-slate-500">${data.levels[i] !== null ? data.levels[i] + 'm' : 'N/A'}</td>
-                    <td class="py-3 text-right font-bold text-blue-600">${data.percentages[i]}%</td>
-                `;[cite: 2]
-                dom.tableBody.appendChild(tr);[cite: 2]
+                    <td style="font-weight: 700;">${res.name}</td>
+                    <td>${res.capacity.toLocaleString()} m³</td>
+                    <td><span class="badge">${res.percentage}%</span></td>
+                `;
+                tableBodyEl.appendChild(tr);
+            });
+
+            // 4. Draw Initial Chart for the first reservoir
+            drawChart(DATABASE[0].name);
+        }
+
+        function drawChart(reservoirName) {
+            const res = DATABASE.find(r => r.name === reservoirName);
+            if (!res) return;
+
+            document.getElementById("chart-header").innerText = `${res.name} Historical Trends`;
+            chartBarsEl.innerHTML = "";
+
+            // Create custom HTML bars for each month recorded
+            for (let i = 0; i < res.months.length; i++) {
+                const month = res.months[i];
+                const pct = res.levels[i];
+
+                const barGroup = document.createElement("div");
+                barGroup.className = "bar-group";
+                barGroup.innerHTML = `
+                    <div class="bar-label">
+                        <span>${month}</span>
+                        <span style="color: #2563eb; font-weight:700;">${pct}%</span>
+                    </div>
+                    <div class="bar-bg">
+                        <div class="bar-fill" style="width: ${pct}%"></div>
+                    </div>
+                `;
+                chartBarsEl.appendChild(barGroup);
             }
         }
 
-        // Setup Event Listeners safely
-        document.getElementById('res-selector').addEventListener('change', function(e) {
-            updateDashboard(e.target.value);[cite: 2]
+        // Change event listener
+        selectEl.addEventListener("change", function(e) {
+            drawChart(e.target.value);
         });
 
-        // Safe initiation hook on window load
-        window.onload = initDashboard;
+        // Run as soon as script block is loaded
+        init();
     </script>
 </body>
 </html>
