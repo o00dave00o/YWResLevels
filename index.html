@@ -11,9 +11,14 @@
 
     <div class="max-w-6xl mx-auto px-4 py-8">
         <!-- Header -->
-        <header class="mb-8 border-b border-slate-200 pb-5">
-            <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Yorkshire Water Reservoir Levels Dashboard</h1>
-            <p class="text-slate-500 mt-2">Active monthly monitoring compiled via Stream Open Data Portal.</p>
+        <header class="mb-8 border-b border-slate-200 pb-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Yorkshire Water Reservoir Levels Dashboard</h1>
+                <p class="text-slate-500 mt-2">Active monthly monitoring compiled via Stream Open Data Portal.</p>
+            </div>
+            <div id="status-badge" class="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 animate-pulse">
+                Connecting to ArcGIS Live Feed...
+            </div>
         </header>
 
         <!-- Network-Wide Summary KPI Cards -->
@@ -22,7 +27,7 @@
             <div class="bg-gradient-to-tr from-slate-900 to-slate-800 text-white p-6 rounded-2xl shadow-md">
                 <span class="block text-xs uppercase tracking-wider font-bold text-slate-400">Total Network Capacity</span>
                 <div class="mt-2 flex items-baseline gap-2">
-                    <span class="text-3xl font-extrabold">156,674</span>
+                    <span id="metric-max-capacity" class="text-3xl font-extrabold">--</span>
                     <span class="text-sm font-semibold text-slate-300">m³</span>
                 </div>
                 <p class="text-slate-400 text-xs mt-2">Combined maximum capacity of all monitored reservoirs.</p>
@@ -32,7 +37,7 @@
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                 <span class="block text-xs uppercase tracking-wider font-semibold text-slate-500">Current Total Reserves</span>
                 <div class="mt-2 flex items-baseline gap-2">
-                    <span class="text-3xl font-extrabold text-slate-900">113,634</span>
+                    <span id="metric-current-volume" class="text-3xl font-extrabold text-slate-900">--</span>
                     <span class="text-sm font-semibold text-slate-500">m³</span>
                 </div>
                 <p class="text-slate-400 text-xs mt-2">Estimated current storage volume based on latest readings.</p>
@@ -42,11 +47,11 @@
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                 <span class="block text-xs uppercase tracking-wider font-semibold text-slate-500">Overall Reserve Level</span>
                 <div class="mt-2 flex items-baseline gap-2">
-                    <span class="text-3xl font-extrabold text-blue-600">72.5%</span>
+                    <span id="metric-total-percentage" class="text-3xl font-extrabold text-blue-600">--%</span>
                 </div>
                 <!-- Mini Progress Bar -->
                 <div class="w-full bg-slate-100 rounded-full h-2.5 mt-3">
-                    <div class="bg-blue-600 h-2.5 rounded-full" style="width: 72.5%"></div>
+                    <div id="metric-progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
                 </div>
             </div>
         </section>
@@ -55,7 +60,8 @@
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
                 <label for="res-selector" class="block text-sm font-semibold text-slate-600 mb-1">Select an Individual Reservoir</label>
-                <select id="res-selector" class="w-full sm:w-72 bg-slate-50 border border-slate-200 text-slate-800 py-2.5 px-4 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium cursor-pointer transition font-bold">
+                <select id="res-selector" class="w-full sm:w-72 bg-slate-50 border border-slate-200 text-slate-800 py-2.5 px-4 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold cursor-pointer transition" disabled>
+                    <option>Loading reservoirs...</option>
                 </select>
             </div>
             <div class="flex gap-6">
@@ -74,8 +80,9 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-12">
             <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                 <h3 class="text-lg font-bold text-slate-900 mb-4">Historical Storage Trend (%)</h3>
-                <div class="relative h-96 w-full">
-                    <canvas id="reservoirChart"></canvas>
+                <div class="relative h-96 w-full flex items-center justify-center" id="chart-container">
+                    <div id="chart-loader" class="text-slate-400 text-sm font-semibold">Waiting for telemetry...</div>
+                    <canvas id="reservoirChart" class="hidden w-full h-full"></canvas>
                 </div>
             </div>
 
@@ -91,6 +98,9 @@
                             </tr>
                         </thead>
                         <tbody id="table-body" class="text-sm font-medium text-slate-600 divide-y divide-slate-50">
+                            <tr>
+                                <td colspan="3" class="py-4 text-center text-slate-400">No active selection</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -113,833 +123,10 @@
                             <th class="py-4 px-4 text-center">Location Link</th>
                         </tr>
                     </thead>
-                    <tbody class="text-sm font-medium divide-y divide-slate-100">
-                        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">GRIMWITH IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">21,764 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    77.8%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=54.07639234727031,-1.9097937304210453" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">SCAR HOUSE IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">9,413 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    66.9%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=54.187838867704215,-1.9126168464945543" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">THRUSCROSS IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">7,893 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    95.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=54.015988770259355,-1.7695223874486472" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">WINSCAR IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">7,589 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    73.6%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.51985222204743,-1.7707124423564398" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">SCAMMONDEN IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">7,419 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    71.7%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.646780606020045,-1.9212996177746378" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">ECCUP ESR</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">7,009 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    75.1%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.87149824168056,-1.5330644067963866" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">LANGSETT IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">5,492 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    57.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.498068805258455,-1.6788754944082545" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">LEIGHTON IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">4,954 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    67.3%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=54.20469086833288,-1.751611019765782" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">BROOMHEAD IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">4,937 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    60.2%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.45916819364805,-1.5963347721362176" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">SWINSTY IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">4,654 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-red-50 text-red-700">
-                    45.8%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.970903748476665,-1.7026946865704256" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">ANGRAM IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">4,639 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    89.1%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=54.17977604279676,-1.9402733787457918" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">FEWSTON IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">3,814 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    59.2%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.98262072759132,-1.7163353353508284" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">DIGLEY IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">3,443 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    81.4%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.55950741210334,-1.8354123747680184" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">BOOTH WOOD IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">3,374 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    80.4%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.642845110900055,-1.9606345441387398" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">BAITINGS IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">3,307 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    82.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.666579519452476,-1.9863412349200198" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">BLACKMOORFOOT IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">2,968 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    78.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.61345853877966,-1.8518300389290516" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">AGDEN IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">2,901 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    79.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.42685044702417,-1.6086802556952773" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">WIDDOP IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">2,770 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-red-50 text-red-700">
-                    47.1%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.791468342786196,-2.104716168882221" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">ROUNDHILL IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">2,446 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    93.3%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=54.19124349476002,-1.7685496721994263" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">BARDEN LOWER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">2,199 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    73.1%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=54.00338103422572,-1.9465361148395368" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">DALE DIKE IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">2,049 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    72.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.42154305545983,-1.6358143595944334" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">BARDEN UPPER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,942 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-red-50 text-red-700">
-                    27.7%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=54.01620803471003,-1.9831769464124875" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">STRINES IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,923 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    63.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.40971147602711,-1.65617862220999" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">MIDHOPE IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,876 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    69.2%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.49084101163353,-1.665365302408059" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">BUTTERLEY IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,724 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    63.6%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.59106011585592,-1.9319780990341808" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">GORPLE UPPER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,715 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    100.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.778867894990505,-2.122879406765584" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">ARDSLEY ESR</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,671 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    65.2%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.72060828372113,-1.5620137309539248" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">WITHENS CLOUGH IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,466 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    58.6%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.70342876762265,-2.0257136152220823" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">REDMIRES UPPER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,381 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-red-50 text-red-700">
-                    46.8%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.36508640379465,-1.6132133087596434" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">GREEN WITHENS IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,365 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    69.1%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.64231101728505,-2.016600557745571" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">BROWNHILL IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,242 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-red-50 text-red-700">
-                    47.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.55220761293191,-1.8281051250762734" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">LOWER LAITHE IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,234 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    66.6%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.82746468970488,-1.9817322320756368" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">INGBIRCHWORTH IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,228 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    73.7%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.550196462000955,-1.6769720316376269" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">GORPLE LOWER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,214 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    66.6%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.778895222157104,-2.0925297004292074" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">WALSHAW DEAN MIDDLE IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">1,063 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    76.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.79779399122631,-2.053098966239695" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">RINGSTONE IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">990 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    77.9%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.65846811015526,-1.9258174033601465" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">CHELKER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">981 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    92.4%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.95955883191353,-1.9176656067886715" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">OGDEN IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">974 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    55.8%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.77213216966424,-1.901812287557094" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">THORNTON STWD ESR</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">948 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    90.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=54.28803191211147,-1.7234750934763206" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">WARLEY MOOR IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">913 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    72.9%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.78161952697398,-1.9559528862853046" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">SCARGILL IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">891 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    62.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.97704234955311,-1.6462375977177368" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">PONDEN IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">891 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    96.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.831555258279586,-2.0079399763268064" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">WALSHAW DEAN UPPER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">862 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    100.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.8067832487948,-2.0500733892949277" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">ROYD MOOR IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">851 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    70.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.5393816629536,-1.6664918702839853" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">WATER SHEDDLES IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">839 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    72.9%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.83824157808581,-2.048591473724974" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">REDMIRES MIDDLE IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">768 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-red-50 text-red-700">
-                    36.7%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.365549936821836,-1.6065217796473708" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">DEERHILL IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">752 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    75.7%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.60182630741165,-1.8926713495320495" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">EMBSAY IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">722 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    95.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.98710712898683,-2.002907353630124" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">THORNTON MOOR IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">701 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    63.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.79195442237255,-1.9189038990015526" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">REDMIRES LOWER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">628 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    52.4%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.36486318446638,-1.6000212045606663" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">RIVELIN LOWER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">615 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    84.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.37643460712713,-1.585091751295268" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">WINDLEDEN UPPER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">597 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    66.9%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.508167416034944,-1.7707754366865494" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">REVA IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">469 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-red-50 text-red-700">
-                    46.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.87937928232535,-1.7717945795345549" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">MIXENDEN IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">450 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    84.2%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.75732669514304,-1.9104768182157432" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">GRAINCLIFFE IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">443 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    92.4%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.874970206382784,-1.8220104793328764" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">DEANHEAD IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">437 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    100.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.63332002510877,-1.9440084900965895" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">YATEHOLME IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">416 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    71.3%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.53883015336712,-1.8324746661525795" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">STUBDEN IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">406 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    91.3%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.79507389824228,-1.9073605467676231" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">LUMLEY MOOR IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">381 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    58.2%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=54.1316697061747,-1.6602260903979147" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">BROADSTONES ESR</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">367 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    91.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.554042050471544,-1.7079013461847103" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">WESSENDEN HEAD IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">358 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    85.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.564970686786815,-1.8988037310075334" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">KEIGHLEY MOOR IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">346 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    89.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.8508331415106,-2.0182043475947067" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">HARDEN IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">334 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    100.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.52886134685435,-1.772157297258806" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">WESSENDEN OLD IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">324 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    90.3%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.574869591300946,-1.9138818994026707" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">RAMSDEN IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">323 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    79.5%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.54691536532251,-1.8294244309394805" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">DEAN HEAD LOWER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">275 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    60.3%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.77083776160232,-1.968101690113762" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">DEAN HEAD UPPER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">240 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    62.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.773534159378066,-1.9680996627024772" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">RIVELIN UPPER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">199 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    85.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.37736442699171,-1.5941018513448493" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">RIDING WOOD IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">190 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    85.3%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.542658315401745,-1.8255633142365622" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">WHINNY GILL IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">168 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    92.4%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.9559467896433,-2.0031335762654394" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">SNAILSDEN IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">165 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    80.2%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.5324822165083,-1.7962916628974215" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">WEECHER IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">152 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    77.9%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.87492655002483,-1.794633286414321" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">BLAKELEY IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">137 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    100.0%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.58296322319985,-1.919907349546803" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">PANORAMA IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">36 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    89.1%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.918478719302456,-1.847039142489594" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
-        <tr class="hover:bg-slate-50 border-b border-slate-100 transition">
-            <td class="py-3.5 px-4 font-bold text-slate-900">CARR BOTTOM IRE</td>
-            <td class="py-3.5 px-4 text-right text-slate-700 font-mono">22 m³</td>
-            <td class="py-3.5 px-4 text-right">
-                <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
-                    72.3%
-                </span>
-            </td>
-            <td class="py-3.5 px-4 text-center"><a href="https://www.google.com/maps/search/?api=1&query=53.898264957615,-1.7777790600887582" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a></td>
-        </tr>
-        
+                    <tbody id="master-directory-rows" class="text-sm font-medium divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="4" class="py-6 text-center text-slate-400">Assembling database records...</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -947,2345 +134,269 @@
     </div>
 
     <script>
-        const reservoirData = {
-  "AGDEN IRE": {
-    "capacity": 2901,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      97.8,
-      91.2,
-      88.4,
-      81.2
-    ],
-    "levels": [
-      2901.85,
-      2901.85,
-      2901.85,
-      2836.58,
-      2644.98,
-      2563.78,
-      2354.81
-    ]
-  },
-  "ANGRAM IRE": {
-    "capacity": 4639,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.2,
-      100.0,
-      98.3,
-      98.5,
-      89.5,
-      93.2,
-      91.3
-    ],
-    "levels": [
-      4600.27,
-      4639.35,
-      4559.3,
-      4571.38,
-      4152.6,
-      4323.95,
-      4234.64
-    ]
-  },
-  "ARDSLEY ESR": {
-    "capacity": 1671,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      76.9,
-      73.1,
-      72.3,
-      68.1,
-      67.9,
-      68.9,
-      65.9
-    ],
-    "levels": [
-      1285.45,
-      1222.16,
-      1207.93,
-      1138.29,
-      1135.01,
-      1150.87,
-      1101.99
-    ]
-  },
-  "BAITINGS IRE": {
-    "capacity": 3307,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.6,
-      100.0,
-      98.5,
-      99.9,
-      99.1,
-      90.4,
-      82.6
-    ],
-    "levels": [
-      3293.72,
-      3307.04,
-      3256.41,
-      3304.14,
-      3277.8,
-      2989.57,
-      2731.35
-    ]
-  },
-  "BARDEN LOWER IRE": {
-    "capacity": 2199,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      97.8,
-      100.0,
-      100.0,
-      95.7,
-      85.5,
-      82.2,
-      74.8
-    ],
-    "levels": [
-      2152.34,
-      2199.63,
-      2199.17,
-      2104.32,
-      1880.28,
-      1807.14,
-      1645.74
-    ]
-  },
-  "BARDEN UPPER IRE": {
-    "capacity": 1942,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      91.3,
-      97.8,
-      93.8,
-      72.8,
-      46.5,
-      29.7,
-      27.4
-    ],
-    "levels": [
-      1774.39,
-      1900.9,
-      1822.53,
-      1413.86,
-      903.57,
-      577.92,
-      532.79
-    ]
-  },
-  "BLACKMOORFOOT IRE": {
-    "capacity": 2968,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      86.8,
-      97.4,
-      93.7,
-      92.9,
-      87.2,
-      83.6,
-      78.9
-    ],
-    "levels": [
-      2575.6,
-      2889.43,
-      2781.98,
-      2756.3,
-      2589.21,
-      2482.46,
-      2341.48
-    ]
-  },
-  "BLAKELEY IRE": {
-    "capacity": 137,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      100.0
-    ],
-    "levels": [
-      137.09,
-      137.09,
-      137.09,
-      137.09,
-      137.09,
-      137.09,
-      137.09
-    ]
-  },
-  "BOOTH WOOD IRE": {
-    "capacity": 3374,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.3,
-      100.0,
-      100.0,
-      99.7,
-      92.5,
-      86.9,
-      81.5
-    ],
-    "levels": [
-      3349.0,
-      3374.0,
-      3374.0,
-      3365.5,
-      3121.5,
-      2930.58,
-      2750.52
-    ]
-  },
-  "BROADSTONES ESR": {
-    "capacity": 367,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      97.8,
-      100.0,
-      100.0,
-      99.5,
-      99.1,
-      100.0,
-      94.4
-    ],
-    "levels": [
-      358.98,
-      367.0,
-      367.0,
-      365.3,
-      363.6,
-      367.0,
-      346.59
-    ]
-  },
-  "BROOMHEAD IRE": {
-    "capacity": 4937,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.5,
-      100.0,
-      99.8,
-      92.9,
-      83.2,
-      75.5,
-      62.6
-    ],
-    "levels": [
-      4913.26,
-      4937.28,
-      4929.6,
-      4588.04,
-      4109.24,
-      3726.98,
-      3092.32
-    ]
-  },
-  "BROWNHILL IRE": {
-    "capacity": 1242,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.7,
-      100.0,
-      98.3,
-      99.8,
-      90.4,
-      68.8,
-      49.7
-    ],
-    "levels": [
-      1238.75,
-      1242.72,
-      1222.15,
-      1240.07,
-      1124.0,
-      854.58,
-      617.34
-    ]
-  },
-  "BUTTERLEY IRE": {
-    "capacity": 1724,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      97.4,
-      100.0,
-      95.8,
-      87.1,
-      80.7,
-      75.7,
-      67.2
-    ],
-    "levels": [
-      1679.48,
-      1724.77,
-      1651.54,
-      1502.86,
-      1391.66,
-      1305.74,
-      1158.64
-    ]
-  },
-  "CARR BOTTOM IRE": {
-    "capacity": 22,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      93.1,
-      89.5,
-      81.5,
-      74.0
-    ],
-    "levels": [
-      22.0,
-      22.0,
-      22.0,
-      20.48,
-      19.7,
-      17.92,
-      16.28
-    ]
-  },
-  "CHELKER IRE": {
-    "capacity": 981,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      93.4,
-      93.9,
-      94.5,
-      93.8,
-      94.4,
-      94.6,
-      93.5
-    ],
-    "levels": [
-      917.29,
-      921.82,
-      927.73,
-      921.54,
-      926.93,
-      929.09,
-      918.42
-    ]
-  },
-  "DALE DIKE IRE": {
-    "capacity": 2049,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.8,
-      100.0,
-      100.0,
-      94.4,
-      81.7,
-      75.2,
-      70.0
-    ],
-    "levels": [
-      2045.8,
-      2049.41,
-      2048.93,
-      1933.88,
-      1674.26,
-      1542.1,
-      1434.86
-    ]
-  },
-  "DEAN HEAD LOWER IRE": {
-    "capacity": 275,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      93.0,
-      100.0,
-      100.0,
-      99.9,
-      89.3,
-      86.2,
-      61.9
-    ],
-    "levels": [
-      256.44,
-      275.77,
-      275.77,
-      275.58,
-      246.19,
-      237.84,
-      170.64
-    ]
-  },
-  "DEAN HEAD UPPER IRE": {
-    "capacity": 240,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      96.5,
-      100.0,
-      99.9,
-      97.6,
-      97.4,
-      84.8,
-      66.0
-    ],
-    "levels": [
-      231.78,
-      240.23,
-      240.0,
-      234.36,
-      234.07,
-      203.8,
-      158.58
-    ]
-  },
-  "DEANHEAD IRE": {
-    "capacity": 437,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      100.0
-    ],
-    "levels": [
-      437.79,
-      437.79,
-      437.79,
-      437.79,
-      437.79,
-      437.79,
-      437.79
-    ]
-  },
-  "DEERHILL IRE": {
-    "capacity": 752,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      99.5,
-      100.0,
-      99.5,
-      82.6
-    ],
-    "levels": [
-      752.35,
-      752.35,
-      752.35,
-      748.42,
-      752.35,
-      748.26,
-      621.76
-    ]
-  },
-  "DIGLEY IRE": {
-    "capacity": 3443,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      98.2,
-      100.0,
-      99.8,
-      98.7,
-      93.2,
-      89.8,
-      82.9
-    ],
-    "levels": [
-      3381.63,
-      3443.2,
-      3435.43,
-      3399.02,
-      3207.56,
-      3090.88,
-      2854.6
-    ]
-  },
-  "ECCUP ESR": {
-    "capacity": 7009,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      77.8,
-      93.1,
-      95.2,
-      90.7,
-      92.1,
-      87.3,
-      77.0
-    ],
-    "levels": [
-      5452.97,
-      6525.33,
-      6675.4,
-      6359.97,
-      6458.59,
-      6119.48,
-      5397.64
-    ]
-  },
-  "EMBSAY IRE": {
-    "capacity": 722,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      98.0,
-      98.1,
-      98.6,
-      98.7,
-      95.2,
-      98.2,
-      97.5
-    ],
-    "levels": [
-      708.17,
-      708.72,
-      712.83,
-      713.24,
-      688.04,
-      709.76,
-      704.88
-    ]
-  },
-  "FEWSTON IRE": {
-    "capacity": 3814,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      98.4,
-      83.0,
-      63.1
-    ],
-    "levels": [
-      3814.0,
-      3814.0,
-      3814.0,
-      3814.0,
-      3752.37,
-      3166.8,
-      2408.41
-    ]
-  },
-  "GORPLE LOWER IRE": {
-    "capacity": 1214,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      90.9,
-      69.3,
-      65.6,
-      67.1
-    ],
-    "levels": [
-      1214.06,
-      1214.06,
-      1214.06,
-      1104.1,
-      840.86,
-      796.24,
-      814.66
-    ]
-  },
-  "GORPLE UPPER IRE": {
-    "capacity": 1715,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      99.9,
-      99.9,
-      100.0
-    ],
-    "levels": [
-      1715.88,
-      1715.88,
-      1715.88,
-      1715.88,
-      1713.74,
-      1714.6,
-      1715.88
-    ]
-  },
-  "GRAINCLIFFE IRE": {
-    "capacity": 443,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      98.8,
-      98.5,
-      95.2,
-      95.7,
-      95.1,
-      94.0,
-      94.1
-    ],
-    "levels": [
-      437.79,
-      436.61,
-      421.97,
-      424.04,
-      421.28,
-      416.75,
-      417.17
-    ]
-  },
-  "GREEN WITHENS IRE": {
-    "capacity": 1365,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.0,
-      100.0,
-      99.0,
-      100.0,
-      90.8,
-      84.6,
-      71.7
-    ],
-    "levels": [
-      1351.59,
-      1365.38,
-      1351.59,
-      1365.38,
-      1239.14,
-      1155.0,
-      979.58
-    ]
-  },
-  "GRIMWITH IRE": {
-    "capacity": 21764,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      87.6,
-      100.0,
-      100.0,
-      99.2,
-      90.2,
-      87.5,
-      79.7
-    ],
-    "levels": [
-      19070.1,
-      21764.0,
-      21764.0,
-      21588.09,
-      19632.08,
-      19035.46,
-      17346.65
-    ]
-  },
-  "HARDEN IRE": {
-    "capacity": 334,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      81.5,
-      93.2,
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      100.0
-    ],
-    "levels": [
-      272.6,
-      311.77,
-      334.64,
-      334.64,
-      334.64,
-      334.64,
-      334.64
-    ]
-  },
-  "INGBIRCHWORTH IRE": {
-    "capacity": 1228,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      96.7,
-      88.0,
-      80.8,
-      74.2
-    ],
-    "levels": [
-      1228.69,
-      1228.69,
-      1228.69,
-      1187.6,
-      1080.64,
-      993.24,
-      911.46
-    ]
-  },
-  "KEIGHLEY MOOR IRE": {
-    "capacity": 346,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.9,
-      100.0,
-      99.6,
-      98.8,
-      92.8,
-      95.1,
-      90.6
-    ],
-    "levels": [
-      346.39,
-      346.82,
-      345.39,
-      342.72,
-      322.02,
-      329.83,
-      314.36
-    ]
-  },
-  "LANGSETT IRE": {
-    "capacity": 5492,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      98.9,
-      100.0,
-      99.0,
-      91.5,
-      77.0,
-      69.7,
-      59.2
-    ],
-    "levels": [
-      5433.25,
-      5492.44,
-      5437.52,
-      5025.97,
-      4230.99,
-      3826.42,
-      3249.9
-    ]
-  },
-  "LEIGHTON IRE": {
-    "capacity": 4954,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.0,
-      100.0,
-      99.3,
-      96.3,
-      88.3,
-      81.0,
-      68.8
-    ],
-    "levels": [
-      4906.44,
-      4954.86,
-      4920.09,
-      4771.18,
-      4375.83,
-      4011.48,
-      3408.24
-    ]
-  },
-  "LOWER LAITHE IRE": {
-    "capacity": 1234,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.6,
-      100.0,
-      98.9,
-      97.2,
-      91.3,
-      79.7,
-      68.1
-    ],
-    "levels": [
-      1229.42,
-      1234.85,
-      1221.09,
-      1200.79,
-      1127.39,
-      984.5,
-      841.48
-    ]
-  },
-  "LUMLEY MOOR IRE": {
-    "capacity": 381,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      98.6,
-      100.0,
-      98.6,
-      89.6,
-      78.6,
-      64.5,
-      59.0
-    ],
-    "levels": [
-      376.15,
-      381.38,
-      376.05,
-      341.61,
-      299.79,
-      245.89,
-      224.96
-    ]
-  },
-  "MIDHOPE IRE": {
-    "capacity": 1876,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.0,
-      100.0,
-      100.0,
-      99.1,
-      93.8,
-      83.0,
-      71.0
-    ],
-    "levels": [
-      1857.79,
-      1876.88,
-      1876.88,
-      1859.3,
-      1760.47,
-      1557.05,
-      1333.39
-    ]
-  },
-  "MIXENDEN IRE": {
-    "capacity": 450,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      98.2,
-      99.9,
-      98.7,
-      96.6,
-      89.2,
-      91.2,
-      87.1
-    ],
-    "levels": [
-      442.65,
-      450.34,
-      444.82,
-      435.42,
-      401.87,
-      411.01,
-      392.46
-    ]
-  },
-  "OGDEN IRE": {
-    "capacity": 974,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.2,
-      100.0,
-      99.6,
-      99.2,
-      88.3,
-      73.1,
-      55.8
-    ],
-    "levels": [
-      965.93,
-      974.08,
-      970.25,
-      966.64,
-      860.13,
-      712.28,
-      543.91
-    ]
-  },
-  "PANORAMA IRE": {
-    "capacity": 36,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      87.9,
-      82.7,
-      86.7
-    ],
-    "levels": [
-      36.82,
-      36.82,
-      36.82,
-      36.82,
-      32.36,
-      30.47,
-      31.92
-    ]
-  },
-  "PONDEN IRE": {
-    "capacity": 891,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.5,
-      100.0,
-      100.0,
-      99.7,
-      95.4,
-      99.5,
-      97.5
-    ],
-    "levels": [
-      887.01,
-      891.21,
-      891.21,
-      888.69,
-      849.79,
-      886.5,
-      868.79
-    ]
-  },
-  "RAMSDEN IRE": {
-    "capacity": 323,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.0,
-      100.0,
-      100.0,
-      98.8,
-      98.3,
-      93.0,
-      81.3
-    ],
-    "levels": [
-      320.49,
-      323.76,
-      323.67,
-      320.04,
-      318.12,
-      301.15,
-      263.14
-    ]
-  },
-  "REDMIRES LOWER IRE": {
-    "capacity": 628,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      97.8,
-      96.3,
-      75.2,
-      60.0,
-      52.2
-    ],
-    "levels": [
-      628.14,
-      628.14,
-      614.0,
-      604.66,
-      472.67,
-      376.69,
-      328.02
-    ]
-  },
-  "REDMIRES MIDDLE IRE": {
-    "capacity": 768,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      78.4,
-      85.9,
-      86.6,
-      78.1,
-      64.9,
-      45.6,
-      37.7
-    ],
-    "levels": [
-      602.24,
-      660.0,
-      665.95,
-      600.43,
-      498.79,
-      350.82,
-      289.71
-    ]
-  },
-  "REDMIRES UPPER IRE": {
-    "capacity": 1381,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      64.5,
-      62.9,
-      53.8,
-      52.9,
-      54.4,
-      55.7,
-      48.6
-    ],
-    "levels": [
-      890.72,
-      869.75,
-      743.38,
-      731.12,
-      751.04,
-      769.8,
-      672.13
-    ]
-  },
-  "REVA IRE": {
-    "capacity": 469,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      92.7,
-      100.0,
-      99.9,
-      100.0,
-      88.0,
-      69.2,
-      50.3
-    ],
-    "levels": [
-      435.19,
-      469.3,
-      468.73,
-      469.3,
-      412.96,
-      324.86,
-      235.91
-    ]
-  },
-  "RIDING WOOD IRE": {
-    "capacity": 190,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      99.3,
-      91.6
-    ],
-    "levels": [
-      190.26,
-      190.26,
-      190.26,
-      190.26,
-      190.26,
-      188.88,
-      174.2
-    ]
-  },
-  "RINGSTONE IRE": {
-    "capacity": 990,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      91.8,
-      100.0,
-      94.7,
-      90.9,
-      92.2,
-      93.0,
-      79.4
-    ],
-    "levels": [
-      909.34,
-      990.84,
-      938.04,
-      901.0,
-      913.58,
-      921.44,
-      786.38
-    ]
-  },
-  "RIVELIN LOWER IRE": {
-    "capacity": 615,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      94.8,
-      86.9,
-      89.8,
-      91.5,
-      86.3
-    ],
-    "levels": [
-      615.53,
-      615.53,
-      583.79,
-      534.89,
-      552.95,
-      563.14,
-      531.42
-    ]
-  },
-  "RIVELIN UPPER IRE": {
-    "capacity": 199,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      99.2,
-      90.1
-    ],
-    "levels": [
-      199.8,
-      199.8,
-      199.8,
-      199.8,
-      199.8,
-      198.28,
-      180.02
-    ]
-  },
-  "ROUNDHILL IRE": {
-    "capacity": 2446,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      99.9,
-      99.5,
-      99.9,
-      99.5,
-      96.0
-    ],
-    "levels": [
-      2446.0,
-      2446.0,
-      2444.1,
-      2433.22,
-      2443.62,
-      2433.16,
-      2348.81
-    ]
-  },
-  "ROYD MOOR IRE": {
-    "capacity": 851,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      87.8,
-      98.5,
-      87.0,
-      78.5,
-      82.4,
-      78.3,
-      71.5
-    ],
-    "levels": [
-      747.18,
-      838.38,
-      740.76,
-      668.33,
-      701.87,
-      666.45,
-      608.88
-    ]
-  },
-  "SCAMMONDEN IRE": {
-    "capacity": 7419,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      99.8,
-      91.8,
-      83.2,
-      73.6
-    ],
-    "levels": [
-      7419.84,
-      7419.84,
-      7418.16,
-      7402.04,
-      6813.73,
-      6175.2,
-      5459.76
-    ]
-  },
-  "SCAR HOUSE IRE": {
-    "capacity": 9413,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      98.3,
-      100.0,
-      99.4,
-      94.9,
-      82.6,
-      82.0,
-      69.3
-    ],
-    "levels": [
-      9257.29,
-      9413.96,
-      9356.45,
-      8931.41,
-      7774.51,
-      7719.02,
-      6528.18
-    ]
-  },
-  "SCARGILL IRE": {
-    "capacity": 891,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.5,
-      100.0,
-      99.1,
-      95.6,
-      90.8,
-      80.3,
-      65.3
-    ],
-    "levels": [
-      887.47,
-      891.7,
-      883.36,
-      852.81,
-      809.6,
-      716.05,
-      582.61
-    ]
-  },
-  "SNAILSDEN IRE": {
-    "capacity": 165,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      98.9,
-      100.0,
-      99.9,
-      99.3,
-      99.9,
-      96.0,
-      83.1
-    ],
-    "levels": [
-      163.32,
-      165.21,
-      165.06,
-      164.08,
-      165.02,
-      158.55,
-      137.29
-    ]
-  },
-  "STRINES IRE": {
-    "capacity": 1923,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      95.4,
-      77.5,
-      64.8
-    ],
-    "levels": [
-      1923.23,
-      1923.23,
-      1923.23,
-      1923.23,
-      1835.08,
-      1490.32,
-      1245.9
-    ]
-  },
-  "STUBDEN IRE": {
-    "capacity": 406,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.3,
-      100.0,
-      99.8,
-      97.1,
-      80.4,
-      79.9,
-      87.6
-    ],
-    "levels": [
-      403.26,
-      406.03,
-      405.42,
-      394.45,
-      326.29,
-      324.61,
-      355.58
-    ]
-  },
-  "SWINSTY IRE": {
-    "capacity": 4654,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      96.5,
-      100.0,
-      98.3,
-      87.4,
-      64.4,
-      51.7,
-      44.1
-    ],
-    "levels": [
-      4491.39,
-      4654.51,
-      4576.26,
-      4066.23,
-      2996.71,
-      2406.32,
-      2053.64
-    ]
-  },
-  "THORNTON MOOR IRE": {
-    "capacity": 701,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.9,
-      100.0,
-      99.6,
-      98.9,
-      93.6,
-      86.4,
-      68.5
-    ],
-    "levels": [
-      700.98,
-      701.89,
-      699.34,
-      694.16,
-      656.88,
-      606.78,
-      480.56
-    ]
-  },
-  "THORNTON STWD ESR": {
-    "capacity": 948,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      97.1,
-      96.1,
-      97.2,
-      96.4,
-      96.3,
-      94.5,
-      90.7
-    ],
-    "levels": [
-      920.52,
-      911.03,
-      921.74,
-      914.42,
-      913.06,
-      895.8,
-      860.46
-    ]
-  },
-  "THRUSCROSS IRE": {
-    "capacity": 7893,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      97.5
-    ],
-    "levels": [
-      7893.58,
-      7893.58,
-      7893.58,
-      7893.58,
-      7893.58,
-      7893.58,
-      7697.18
-    ]
-  },
-  "WALSHAW DEAN MIDDLE IRE": {
-    "capacity": 1063,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      95.8,
-      99.3,
-      92.2,
-      98.4,
-      99.8,
-      98.8,
-      81.8
-    ],
-    "levels": [
-      1018.1,
-      1055.7,
-      980.04,
-      1045.62,
-      1060.93,
-      1050.02,
-      869.26
-    ]
-  },
-  "WALSHAW DEAN UPPER IRE": {
-    "capacity": 862,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      100.0,
-      99.8,
-      99.9,
-      100.0
-    ],
-    "levels": [
-      862.11,
-      862.11,
-      862.11,
-      862.11,
-      860.11,
-      861.11,
-      862.11
-    ]
-  },
-  "WARLEY MOOR IRE": {
-    "capacity": 913,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.4,
-      100.0,
-      96.1,
-      89.6,
-      85.6,
-      86.2,
-      77.2
-    ],
-    "levels": [
-      907.74,
-      913.46,
-      877.68,
-      818.3,
-      781.82,
-      787.54,
-      705.2
-    ]
-  },
-  "WATER SHEDDLES IRE": {
-    "capacity": 839,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      95.3,
-      100.0,
-      99.7,
-      97.2,
-      86.2,
-      83.4,
-      74.8
-    ],
-    "levels": [
-      799.61,
-      839.01,
-      836.87,
-      815.26,
-      723.38,
-      700.13,
-      627.62
-    ]
-  },
-  "WEECHER IRE": {
-    "capacity": 152,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.9,
-      100.0,
-      100.0,
-      99.9,
-      95.6,
-      78.4,
-      72.6
-    ],
-    "levels": [
-      152.71,
-      152.87,
-      152.87,
-      152.78,
-      146.2,
-      119.9,
-      110.94
-    ]
-  },
-  "WESSENDEN HEAD IRE": {
-    "capacity": 358,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.0,
-      100.0,
-      100.0,
-      99.5,
-      100.0,
-      95.8,
-      87.0
-    ],
-    "levels": [
-      355.22,
-      358.72,
-      358.72,
-      357.04,
-      358.72,
-      343.75,
-      311.94
-    ]
-  },
-  "WESSENDEN OLD IRE": {
-    "capacity": 324,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      100.0,
-      100.0,
-      98.4,
-      72.5,
-      85.9,
-      91.2
-    ],
-    "levels": [
-      324.13,
-      324.13,
-      324.13,
-      318.9,
-      235.05,
-      278.55,
-      295.54
-    ]
-  },
-  "WHINNY GILL IRE": {
-    "capacity": 168,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.5,
-      100.0,
-      99.8,
-      97.1,
-      93.4,
-      93.3,
-      92.7
-    ],
-    "levels": [
-      167.47,
-      168.29,
-      167.99,
-      163.36,
-      157.1,
-      156.96,
-      155.97
-    ]
-  },
-  "WIDDOP IRE": {
-    "capacity": 2770,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      66.5,
-      92.0,
-      93.1,
-      94.6,
-      77.3,
-      64.3,
-      49.8
-    ],
-    "levels": [
-      1841.64,
-      2549.9,
-      2579.17,
-      2621.28,
-      2143.04,
-      1781.59,
-      1380.94
-    ]
-  },
-  "WINDLEDEN UPPER IRE": {
-    "capacity": 597,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      82.0,
-      93.9,
-      100.0,
-      97.8,
-      86.0,
-      80.7,
-      69.1
-    ],
-    "levels": [
-      489.4,
-      560.83,
-      597.21,
-      583.93,
-      513.7,
-      481.96,
-      412.88
-    ]
-  },
-  "WINSCAR IRE": {
-    "capacity": 7589,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      79.2,
-      95.8,
-      99.5,
-      96.0,
-      90.2,
-      83.0,
-      74.9
-    ],
-    "levels": [
-      6014.64,
-      7270.4,
-      7552.91,
-      7289.07,
-      6845.35,
-      6301.06,
-      5685.58
-    ]
-  },
-  "WITHENS CLOUGH IRE": {
-    "capacity": 1466,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      99.2,
-      99.8,
-      98.2,
-      95.4,
-      83.4,
-      73.2,
-      60.6
-    ],
-    "levels": [
-      1454.52,
-      1463.12,
-      1441.02,
-      1399.89,
-      1224.04,
-      1073.75,
-      889.26
-    ]
-  },
-  "YATEHOLME IRE": {
-    "capacity": 416,
-    "months": [
-      "Jan 2026",
-      "Feb 2026",
-      "Mar 2026",
-      "Apr 2026",
-      "May 2026",
-      "Jun 2026",
-      "Jul 2026"
-    ],
-    "percentages": [
-      100.0,
-      92.4,
-      100.0,
-      100.0,
-      100.0,
-      96.7,
-      75.6
-    ],
-    "levels": [
-      416.1,
-      384.27,
-      416.1,
-      416.1,
-      416.1,
-      402.53,
-      314.42
-    ]
-  }
-};
+        let reservoirData = {};
         let chartInstance = null;
 
         const selector = document.getElementById('res-selector');
         const capacityVal = document.getElementById('capacity-val');
         const latestPct = document.getElementById('latest-pct');
         const tableBody = document.getElementById('table-body');
+        const masterDirectoryBody = document.getElementById('master-directory-rows');
         const ctx = document.getElementById('reservoirChart').getContext('2d');
 
-        const sortedReservoirs = Object.keys(reservoirData).sort();
-        sortedReservoirs.forEach(name => {
-            const opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = name;
-            selector.appendChild(opt);
-        });
+        // ArcGIS Open Data Parameters[cite: 2]
+        const QUERY_URL = "https://services-eu1.arcgis.com/1WqkK5cDKUbF0CkH/arcgis/rest/services/Yorkshire%20Water%20Reservoir%20Levels%202026/FeatureServer/0/query";
+        const OUT_FIELDS = "RESERVOIR_NAME,DATE,CAPACITY,CURRENT_LEVEL,CURRENT_PERCENTAGE,LATITUDE,LONGITUDE";
+        const LIMIT_PER_REQUEST = 2000;
+
+        // Fallback Mock Data[cite: 2]
+        const MOCK_RECORDS = [
+            {"RESERVOIR_NAME": "GRIMWITH IRE", "DATE": 1768435200000, "CAPACITY": 21764, "CURRENT_LEVEL": 21328, "CURRENT_PERCENTAGE": 98.0, "LATITUDE": 54.076, "LONGITUDE": -1.910},
+            {"RESERVOIR_NAME": "GRIMWITH IRE", "DATE": 1771027200000, "CAPACITY": 21764, "CURRENT_LEVEL": 21111, "CURRENT_PERCENTAGE": 97.0, "LATITUDE": 54.076, "LONGITUDE": -1.910},
+            {"RESERVOIR_NAME": "ECCUP ESR", "DATE": 1768435200000, "CAPACITY": 7009, "CURRENT_LEVEL": 6167, "CURRENT_PERCENTAGE": 88.0, "LATITUDE": 53.871, "LONGITUDE": -1.533},
+            {"RESERVOIR_NAME": "ECCUP ESR", "DATE": 1771027200000, "CAPACITY": 7009, "CURRENT_LEVEL": 6097, "CURRENT_PERCENTAGE": 87.0, "LATITUDE": 53.871, "LONGITUDE": -1.533},
+        ];
+
+        async function fetchReservoirData() {
+            let allFeatures = [];
+            let offset = 0;
+
+            try {
+                while (true) {
+                    const url = `${QUERY_URL}?where=1%3D1&outFields=${OUT_FIELDS}&f=json&resultOffset=${offset}&resultRecordCount=${LIMIT_PER_REQUEST}`;
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error.message);
+
+                    const features = data.features || [];
+                    if (features.length === 0) break;
+
+                    allFeatures.push(...features.map(f => f.attributes));
+                    if (features.length < LIMIT_PER_REQUEST) break;
+                    offset += features.length;
+                }
+
+                if (allFeatures.length === 0) throw new Error("No data returned from telemetry server.");
+                
+                updateStatusBadge("Live API Connected", "bg-emerald-100 text-emerald-800");
+                processAndAggregateData(allFeatures);
+
+            } catch (err) {
+                console.warn("API Call Failed. Falling back to local offline simulation. Error: ", err);
+                updateStatusBadge("Offline - Using Mock Data", "bg-rose-100 text-rose-800");
+                processAndAggregateData(MOCK_RECORDS);
+            }
+        }
+
+        function updateStatusBadge(text, bgClass) {
+            const badge = document.getElementById('status-badge');
+            badge.innerText = text;
+            badge.className = `px-3 py-1.5 rounded-full text-xs font-bold ${bgClass}`;
+        }
+
+        function processAndAggregateData(records) {
+            // Normalize columns to lowercase matching the Python script[cite: 2]
+            const df = records.map(r => ({
+                reservoir_name: r.RESERVOIR_NAME || r.reservoir_name,
+                date: new Date(r.DATE || r.date),
+                capacity: Number(r.CAPACITY || r.capacity || 0),
+                current_level: Number(r.CURRENT_LEVEL || r.current_level || 0),
+                current_percentage: Number(r.CURRENT_PERCENTAGE || r.current_percentage || 0),
+                latitude: r.LATITUDE || r.latitude || null,
+                longitude: r.LONGITUDE || r.longitude || null
+            }));
+
+            // Month Formatters
+            const getYearMonth = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+            const getMonthName = d => d.toLocaleDateString([], { month: 'short', year: 'numeric' });
+
+            // 1. Group by Reservoir & Year-Month for historical trend calculations[cite: 2]
+            const historicalGroup = {};
+            df.forEach(row => {
+                const resName = row.reservoir_name;
+                const ym = getYearMonth(row.date);
+                const mName = getMonthName(row.date);
+
+                if (!historicalGroup[resName]) historicalGroup[resName] = {};
+                if (!historicalGroup[resName][ym]) {
+                    historicalGroup[resName][ym] = {
+                        month_name: mName,
+                        levels: [],
+                        percentages: [],
+                        capacity: row.capacity
+                    };
+                }
+                historicalGroup[resName][ym].levels.push(row.current_level);
+                historicalGroup[resName][ym].percentages.push(row.current_percentage);
+            });
+
+            // Flatten and group historical structures[cite: 2]
+            reservoirData = {};
+            Object.keys(historicalGroup).sort().forEach(resName => {
+                const monthsSorted = Object.keys(historicalGroup[resName]).sort();
+                reservoirData[resName] = {
+                    capacity: historicalGroup[resName][monthsSorted[0]].capacity,
+                    months: monthsSorted.map(ym => historicalGroup[resName][ym].month_name),
+                    percentages: monthsSorted.map(ym => {
+                        const arr = historicalGroup[resName][ym].percentages;
+                        return Math.round((arr.reduce((a,b)=>a+b, 0) / arr.length) * 10) / 10;
+                    }),
+                    levels: monthsSorted.map(ym => {
+                        const arr = historicalGroup[resName][ym].levels;
+                        return Math.round((arr.reduce((a,b)=>a+b, 0) / arr.length) * 100) / 100;
+                    })
+                };
+            });
+
+            // 2. Identify the absolute latest record for each unique reservoir[cite: 2]
+            const latestRecordsMap = {};
+            df.forEach(row => {
+                const currentStored = latestRecordsMap[row.reservoir_name];
+                if (!currentStored || row.date > currentStored.date) {
+                    latestRecordsMap[row.reservoir_name] = row;
+                }
+            });
+
+            const latestList = Object.values(latestRecordsMap);
+
+            // Calculate network summary metrics[cite: 2]
+            let totalMaxCapacity = 0;
+            let totalCurrentReserves = 0;
+
+            latestList.forEach(row => {
+                const currentVolume = row.capacity * (row.current_percentage / 100.0);[cite: 2]
+                totalMaxCapacity += row.capacity;
+                totalCurrentReserves += currentVolume;
+            });
+
+            const totalPercentage = totalMaxCapacity > 0 ? (totalCurrentReserves / totalMaxCapacity) * 100 : 0;[cite: 2]
+
+            // Apply Network KPI values to DOM[cite: 2]
+            document.getElementById('metric-max-capacity').innerText = totalMaxCapacity.toLocaleString([], {maximumFractionDigits:0});
+            document.getElementById('metric-current-volume').innerText = totalCurrentReserves.toLocaleString([], {maximumFractionDigits:0});
+            document.getElementById('metric-total-percentage').innerText = totalPercentage.toFixed(1) + '%';
+            document.getElementById('metric-progress-bar').style.width = `${totalPercentage}%`;
+
+            // 3. Build Selector List[cite: 2]
+            selector.innerHTML = '';
+            const sortedReservoirs = Object.keys(reservoirData).sort();[cite: 2]
+            sortedReservoirs.forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                selector.appendChild(opt);
+            });
+            selector.removeAttribute('disabled');
+
+            // 4. Build Master Directory HTML rows ordered by capacity descending[cite: 2]
+            const sortedDirectory = latestList.sort((a,b) => b.capacity - a.capacity);[cite: 2]
+            masterDirectoryBody.innerHTML = '';
+            sortedDirectory.forEach(row => {
+                const cap = row.capacity;
+                const pct = row.current_percentage !== null ? row.current_percentage.toFixed(1) : 'N/A';[cite: 2]
+                const badgeClass = pct < 50 ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700';[cite: 2]
+
+                let mapsLink = '<span class="text-slate-400 italic">No coordinates</span>';[cite: 2]
+                if (row.latitude && row.longitude) {
+                    mapsLink = `<a href="https://www.google.com/maps/search/?api=1&query=${row.latitude},${row.longitude}" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a>`;[cite: 2]
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 border-b border-slate-100 transition";[cite: 2]
+                tr.innerHTML = `
+                    <td class="py-3.5 px-4 font-bold text-slate-900">${row.reservoir_name}</td>
+                    <td class="py-3.5 px-4 text-right text-slate-700 font-mono">${cap.toLocaleString()} m³</td>
+                    <td class="py-3.5 px-4 text-right">
+                        <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full ${badgeClass}">
+                            ${pct}%
+                        </span>
+                    </td>
+                    <td class="py-3.5 px-4 text-center">${mapsLink}</td>
+                `;[cite: 2]
+                masterDirectoryBody.appendChild(tr);
+            });
+
+            // Reveal canvas and trigger setup
+            document.getElementById('chart-loader').classList.add('hidden');
+            document.getElementById('reservoirChart').classList.remove('hidden');
+
+            if (sortedReservoirs.length > 0) {
+                updateDashboard(sortedReservoirs[0]);[cite: 2]
+            }
+        }
 
         function updateDashboard(resName) {
-            const data = reservoirData[resName];
-            capacityVal.textContent = Number(data.capacity).toLocaleString();
+            const data = reservoirData[resName];[cite: 2]
+            capacityVal.textContent = Number(data.capacity).toLocaleString();[cite: 2]
             
-            const lastPercentage = data.percentages[data.percentages.length - 1];
-            latestPct.textContent = lastPercentage ? lastPercentage + '%' : 'N/A';
+            const lastPercentage = data.percentages[data.percentages.length - 1];[cite: 2]
+            latestPct.textContent = lastPercentage ? lastPercentage + '%' : 'N/A';[cite: 2]
 
             if (chartInstance) {
-                chartInstance.destroy();
+                chartInstance.destroy();[cite: 2]
             }
 
             chartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: data.months,
+                    labels: data.months,[cite: 2]
                     datasets: [{
                         label: 'Water Capacity %',
-                        data: data.percentages,
-                        borderColor: '#2563eb',
-                        backgroundColor: 'rgba(37, 99, 235, 0.08)',
-                        fill: true,
-                        tension: 0.35,
-                        borderWidth: 3,
-                        pointRadius: 4,
-                        pointHoverRadius: 7,
+                        data: data.percentages,[cite: 2]
+                        borderColor: '#2563eb',[cite: 2]
+                        backgroundColor: 'rgba(37, 99, 235, 0.08)',[cite: 2]
+                        fill: true,[cite: 2]
+                        tension: 0.35,[cite: 2]
+                        borderWidth: 3,[cite: 2]
+                        pointRadius: 4,[cite: 2]
+                        pointHoverRadius: 7,[cite: 2]
                     }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
+                    responsive: true,[cite: 2]
+                    maintainAspectRatio: false,[cite: 2]
                     plugins: {
-                        legend: { display: false },
+                        legend: { display: false },[cite: 2]
                         tooltip: {
-                            padding: 12,
-                            backgroundColor: '#1e293b',
-                            titleFont: { size: 14, weight: 'bold' },
-                            bodyFont: { size: 13 }
+                            padding: 12,[cite: 2]
+                            backgroundColor: '#1e293b',[cite: 2]
+                            titleFont: { size: 14, weight: 'bold' },[cite: 2]
+                            bodyFont: { size: 13 }[cite: 2]
                         }
                     },
                     scales: {
                         y: {
-                            min: 0,
-                            max: 100,
-                            ticks: { callback: value => value + '%' },
-                            grid: { color: '#f1f5f9' }
+                            min: 0,[cite: 2]
+                            max: 100,[cite: 2]
+                            ticks: { callback: value => value + '%' },[cite: 2]
+                            grid: { color: '#f1f5f9' }[cite: 2]
                         },
                         x: {
-                            grid: { display: false }
+                            grid: { display: false }[cite: 2]
                         }
                     }
                 }
             });
 
-            tableBody.innerHTML = '';
-            for (let i = data.months.length - 1; i >= 0; i--) {
+            tableBody.innerHTML = '';[cite: 2]
+            for (let i = data.months.length - 1; i >= 0; i--) {[cite: 2]
                 const tr = document.createElement('tr');
-                tr.className = 'hover:bg-slate-50 transition-colors';
+                tr.className = 'hover:bg-slate-50 transition-colors';[cite: 2]
                 tr.innerHTML = `
                     <td class="py-3 font-semibold text-slate-800">${data.months[i]}</td>
                     <td class="py-3 text-right text-slate-500">${data.levels[i] !== null ? data.levels[i] + 'm' : 'N/A'}</td>
                     <td class="py-3 text-right font-bold text-blue-600">${data.percentages[i]}%</td>
-                `;
-                tableBody.appendChild(tr);
+                `;[cite: 2]
+                tableBody.appendChild(tr);[cite: 2]
             }
         }
 
-        selector.addEventListener('change', (e) => updateDashboard(e.target.value));
+        selector.addEventListener('change', (e) => updateDashboard(e.target.value));[cite: 2]
 
-        if(sortedReservoirs.length > 0) {
-            updateDashboard(sortedReservoirs[0]);
-        }
+        // Initialize script
+        fetchReservoirData();
     </script>
 </body>
 </html>
