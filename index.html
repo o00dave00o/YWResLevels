@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Yorkshire Water Reservoir Monthly Levels</title>
+    <!-- CSS and Charting libraries loaded from reliable CDNs -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -16,12 +17,9 @@
                 <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Yorkshire Water Reservoir Levels Dashboard</h1>
                 <p class="text-slate-500 mt-2">Active monthly monitoring compiled via Stream Open Data Portal.</p>
             </div>
-            <div class="flex gap-2">
-                <button onclick="forceMockData()" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition">
-                    Force Demo Data (Click if stuck)
-                </button>
-                <div id="status-badge" class="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 animate-pulse">
-                    Connecting to ArcGIS Live Feed...
+            <div>
+                <div id="status-badge" class="px-3 py-1.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                    Displaying Offline Demo Data
                 </div>
             </div>
         </header>
@@ -58,7 +56,7 @@
             <div>
                 <label for="res-selector" class="block text-sm font-semibold text-slate-600 mb-1">Select an Individual Reservoir</label>
                 <select id="res-selector" class="w-full sm:w-72 bg-slate-50 border border-slate-200 text-slate-800 py-2.5 px-4 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold cursor-pointer transition">
-                    <option>Loading reservoirs...</option>
+                    <option>Loading...</option>
                 </select>
             </div>
             <div class="flex gap-6">
@@ -78,7 +76,6 @@
             <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                 <h3 class="text-lg font-bold text-slate-900 mb-4">Historical Storage Trend (%)</h3>
                 <div class="relative h-96 w-full flex items-center justify-center">
-                    <div id="chart-loader" class="text-slate-400 text-sm font-semibold absolute">Waiting for telemetry...</div>
                     <canvas id="reservoirChart" class="w-full h-full"></canvas>
                 </div>
             </div>
@@ -95,9 +92,7 @@
                             </tr>
                         </thead>
                         <tbody id="table-body" class="text-sm font-medium text-slate-600 divide-y divide-slate-50">
-                            <tr>
-                                <td colspan="3" class="py-4 text-center text-slate-400">No active selection</td>
-                            </tr>
+                            <!-- Populated dynamically -->
                         </tbody>
                     </table>
                 </div>
@@ -121,27 +116,20 @@
                         </tr>
                     </thead>
                     <tbody id="master-directory-rows" class="text-sm font-medium divide-y divide-slate-100">
-                        <tr>
-                            <td colspan="4" class="py-6 text-center text-slate-400">Assembling database records...</td>
-                        </tr>
+                        <!-- Populated dynamically -->
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 
+    <!-- Script located at the absolute bottom of body to guarantee all HTML nodes are parsed first -->
     <script>
+        // Global State variables
         let reservoirData = {};
         let chartInstance = null;
 
-        const selector = document.getElementById('res-selector');
-        const capacityVal = document.getElementById('capacity-val');
-        const latestPct = document.getElementById('latest-pct');
-        const tableBody = document.getElementById('table-body');
-        const masterDirectoryBody = document.getElementById('master-directory-rows');
-        const ctx = document.getElementById('reservoirChart').getContext('2d');
-
-        // Clean static Mock Data[cite: 2]
+        // Base fallback demo data[cite: 2]
         const MOCK_RECORDS = [
             {reservoir_name: "GRIMWITH IRE", date: 1768435200000, capacity: 21764, current_level: 21328, current_percentage: 98.0, latitude: 54.076, longitude: -1.910},
             {reservoir_name: "GRIMWITH IRE", date: 1771027200000, capacity: 21764, current_level: 21111, current_percentage: 97.0, latitude: 54.076, longitude: -1.910},
@@ -149,72 +137,92 @@
             {reservoir_name: "ECCUP ESR", date: 1771027200000, capacity: 7009, current_level: 6097, current_percentage: 87.0, latitude: 53.871, longitude: -1.533},
         ];
 
-        async function fetchReservoirData() {
+        // Safe DOM query variables (Only accessed inside functions to avoid early evaluation crashes)
+        function getDOMElements() {
+            return {
+                selector: document.getElementById('res-selector'),
+                capacityVal: document.getElementById('capacity-val'),
+                latestPct: document.getElementById('latest-pct'),
+                tableBody: document.getElementById('table-body'),
+                masterDirectoryBody: document.getElementById('master-directory-rows'),
+                statusBadge: document.getElementById('status-badge'),
+                metricMaxCap: document.getElementById('metric-max-capacity'),
+                metricCurVol: document.getElementById('metric-current-volume'),
+                metricTotPct: document.getElementById('metric-total-percentage'),
+                progressBar: document.getElementById('metric-progress-bar'),
+                canvas: document.getElementById('reservoirChart')
+            };
+        }
+
+        // Initialize with local demo data immediately on page load
+        function initDashboard() {
+            console.log("Initializing dashboard with fallback demo data...");
+            processAndAggregateData(MOCK_RECORDS);
+            
+            // Try fetching live server data in the background
+            fetchLiveTelemetry();
+        }
+
+        // Fetch Live Telemetry from ArcGIS Rest API
+        async function fetchLiveTelemetry() {
             const queryUrl = "https://services-eu1.arcgis.com/1WqkK5cDKUbF0CkH/arcgis/rest/services/Yorkshire%20Water%20Reservoir%20Levels%202026/FeatureServer/0/query";
             const fields = "RESERVOIR_NAME,DATE,CAPACITY,CURRENT_LEVEL,CURRENT_PERCENTAGE,LATITUDE,LONGITUDE";
-            let allFeatures = [];
-            let offset = 0;
-
+            
             try {
-                // Try fetching only 1 page to test connection rapidly
-                const url = `${queryUrl}?where=1%3D1&outFields=${fields}&f=json&resultOffset=${offset}&resultRecordCount=2000`;
-                const response = await fetch(url);
-                if (!response.ok) throw new Error("Network issue");
+                console.log("Attempting live connection to Yorkshire Water Open Portal...");
+                const dom = getDOMElements();
+                dom.statusBadge.innerText = "Attempting live sync...";
+                dom.statusBadge.className = "px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 animate-pulse";
+
+                const response = await fetch(`${queryUrl}?where=1%3D1&outFields=${fields}&f=json&resultRecordCount=2000`);
+                if (!response.ok) throw new Error("Server responded with error status");
 
                 const data = await response.json();
                 const features = data.features || [];
                 
-                if (features.length === 0) {
-                    throw new Error("Empty response");
-                }
+                if (features.length === 0) throw new Error("No database records found on telemetry server");
 
-                // Standardize attributes safely
-                const cleaned = features.map(f => {
-                    const attr = f.attributes || {};
-                    return {
-                        reservoir_name: attr.RESERVOIR_NAME,
+                // Safely translate ArcGIS features to local flat array
+                const cleanedRecords = [];
+                for (let i = 0; i < features.length; i++) {
+                    const attr = features[i].attributes || {};
+                    cleanedRecords.push({
+                        reservoir_name: attr.RESERVOIR_NAME || "UNKNOWN",
                         date: attr.DATE,
                         capacity: Number(attr.CAPACITY || 0),
                         current_level: Number(attr.CURRENT_LEVEL || 0),
                         current_percentage: Number(attr.CURRENT_PERCENTAGE || 0),
                         latitude: attr.LATITUDE || null,
                         longitude: attr.LONGITUDE || null
-                    };
-                });
+                    });
+                }
 
-                updateStatusBadge("Live API Connected", "bg-emerald-100 text-emerald-800");
-                processAndAggregateData(cleaned);
+                console.log(`Live sync successful! Downloaded ${cleanedRecords.length} records.`);
+                dom.statusBadge.innerText = "Live API Connected";
+                dom.statusBadge.className = "px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800";
+                
+                processAndAggregateData(cleanedRecords);
 
             } catch (err) {
-                console.warn("Could not reach API. Automatically falling back to demo data.", err);
-                forceMockData();
+                console.warn("Live API connection skipped. Running seamlessly in Offline Mode. Details:", err.message);
+                const dom = getDOMElements();
+                dom.statusBadge.innerText = "Running Offline (Demo Mode)";
+                dom.statusBadge.className = "px-3 py-1.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800";
             }
         }
 
-        function forceMockData() {
-            updateStatusBadge("Demo Mode (Mock Data)", "bg-rose-100 text-rose-800");
-            processAndAggregateData(MOCK_RECORDS);
-        }
-
-        function updateStatusBadge(text, bgClass) {
-            const badge = document.getElementById('status-badge');
-            badge.innerText = text;
-            badge.className = `px-3 py-1.5 rounded-full text-xs font-bold ${bgClass}`;
-        }
-
+        // Processes arrays and groups datasets
         function processAndAggregateData(records) {
+            const dom = getDOMElements();
             reservoirData = {};
             const latestRecordsMap = {};
 
-            // Loop through entries to format groups & pick latest values
             for (let i = 0; i < records.length; i++) {
                 const r = records[i];
                 const resName = r.reservoir_name;
                 const d = new Date(r.date);
-                const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
                 const mName = d.toLocaleDateString([], { month: 'short', year: 'numeric' });
 
-                // Initialize reservoir entry
                 if (!reservoirData[resName]) {
                     reservoirData[resName] = {
                         capacity: r.capacity,
@@ -224,14 +232,12 @@
                     };
                 }
 
-                // To keep it simple, save unique months
                 if (!reservoirData[resName].months.includes(mName)) {
                     reservoirData[resName].months.push(mName);
                     reservoirData[resName].percentages.push(r.current_percentage);
                     reservoirData[resName].levels.push(r.current_level);
                 }
 
-                // Track the latest record
                 const existingLatest = latestRecordsMap[resName];
                 if (!existingLatest || r.date > existingLatest.date) {
                     latestRecordsMap[resName] = r;
@@ -252,24 +258,24 @@
             const totalPercentage = totalMaxCapacity > 0 ? (totalCurrentReserves / totalMaxCapacity) * 100 : 0;[cite: 2]
 
             // Apply network metrics
-            document.getElementById('metric-max-capacity').innerText = totalMaxCapacity.toLocaleString();
-            document.getElementById('metric-current-volume').innerText = totalCurrentReserves.toLocaleString([], {maximumFractionDigits:0});
-            document.getElementById('metric-total-percentage').innerText = totalPercentage.toFixed(1) + '%';
-            document.getElementById('metric-progress-bar').style.width = `${totalPercentage}%`;
+            dom.metricMaxCap.innerText = Math.round(totalMaxCapacity).toLocaleString();
+            dom.metricCurVol.innerText = Math.round(totalCurrentReserves).toLocaleString();
+            dom.metricTotPct.innerText = totalPercentage.toFixed(1) + '%';
+            dom.progressBar.style.width = `${totalPercentage}%`;
 
             // Build selector dropdown list
-            selector.innerHTML = '';
+            dom.selector.innerHTML = '';
             const sortedReservoirs = Object.keys(reservoirData).sort();[cite: 2]
             sortedReservoirs.forEach(name => {
                 const opt = document.createElement('option');
                 opt.value = name;
                 opt.textContent = name;
-                selector.appendChild(opt);
+                dom.selector.appendChild(opt);
             });
 
             // Build Master Directory list
             const sortedDirectory = latestList.sort((a,b) => b.capacity - a.capacity);[cite: 2]
-            masterDirectoryBody.innerHTML = '';
+            dom.masterDirectoryBody.innerHTML = '';
             sortedDirectory.forEach(row => {
                 const cap = row.capacity;
                 const pct = row.current_percentage !== null ? row.current_percentage.toFixed(1) : 'N/A';[cite: 2]
@@ -292,28 +298,31 @@
                     </td>
                     <td class="py-3.5 px-4 text-center">${mapsLink}</td>
                 `;[cite: 2]
-                masterDirectoryBody.appendChild(tr);
+                dom.masterDirectoryBody.appendChild(tr);
             });
-
-            // Hide the waiting loaders
-            document.getElementById('chart-loader').style.display = 'none';
 
             if (sortedReservoirs.length > 0) {
                 updateDashboard(sortedReservoirs[0]);[cite: 2]
             }
         }
 
+        // Draw selection to dashboard components
         function updateDashboard(resName) {
+            const dom = getDOMElements();
             const data = reservoirData[resName];[cite: 2]
-            capacityVal.textContent = Number(data.capacity).toLocaleString();[cite: 2]
+            if (!data) return;
+
+            dom.capacityVal.textContent = Number(data.capacity).toLocaleString();[cite: 2]
             
             const lastPercentage = data.percentages[data.percentages.length - 1];[cite: 2]
-            latestPct.textContent = lastPercentage ? lastPercentage + '%' : 'N/A';[cite: 2]
+            dom.latestPct.textContent = lastPercentage ? lastPercentage + '%' : 'N/A';[cite: 2]
 
+            // Safe Canvas initialization checks
             if (chartInstance) {
                 chartInstance.destroy();[cite: 2]
             }
 
+            const ctx = dom.canvas.getContext('2d');
             chartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -346,7 +355,7 @@
                 }
             });
 
-            tableBody.innerHTML = '';[cite: 2]
+            dom.tableBody.innerHTML = '';[cite: 2]
             for (let i = data.months.length - 1; i >= 0; i--) {[cite: 2]
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-slate-50 transition-colors';[cite: 2]
@@ -355,14 +364,17 @@
                     <td class="py-3 text-right text-slate-500">${data.levels[i] !== null ? data.levels[i] + 'm' : 'N/A'}</td>
                     <td class="py-3 text-right font-bold text-blue-600">${data.percentages[i]}%</td>
                 `;[cite: 2]
-                tableBody.appendChild(tr);[cite: 2]
+                dom.tableBody.appendChild(tr);[cite: 2]
             }
         }
 
-        selector.addEventListener('change', (e) => updateDashboard(e.target.value));[cite: 2]
+        // Setup Event Listeners safely
+        document.getElementById('res-selector').addEventListener('change', function(e) {
+            updateDashboard(e.target.value);[cite: 2]
+        });
 
-        // Kickoff script execution
-        fetchReservoirData();
+        // Safe initiation hook on window load
+        window.onload = initDashboard;
     </script>
 </body>
 </html>
