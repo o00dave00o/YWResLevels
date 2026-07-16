@@ -3,296 +3,400 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yorkshire Water Reservoirs</title>
-    <style>
-        /* Modern, lightweight default styling */
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #f8fafc;
-            color: #1e293b;
-            margin: 0;
-            padding: 24px;
-        }
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-        }
-        header {
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 16px;
-            margin-bottom: 24px;
-        }
-        h1 {
-            margin: 0 0 6px 0;
-            font-size: 26px;
-            color: #0f172a;
-        }
-        .status-box {
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-weight: 600;
-            margin-bottom: 24px;
-            font-size: 14px;
-        }
-        .status-loading {
-            background-color: #fef3c7;
-            color: #92400e;
-            border: 1px solid #fde68a;
-        }
-        .status-success {
-            background-color: #dcfce7;
-            color: #166534;
-            border: 1px solid #bbf7d0;
-        }
-        .status-error {
-            background-color: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fca5a5;
-            white-space: pre-wrap;
-        }
-        /* Summary/KPI Cards */
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 16px;
-            margin-bottom: 32px;
-        }
-        .card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        .card-title {
-            font-size: 12px;
-            text-transform: uppercase;
-            font-weight: 700;
-            color: #64748b;
-            margin-bottom: 8px;
-            letter-spacing: 0.5px;
-        }
-        .card-value {
-            font-size: 28px;
-            font-weight: 800;
-            color: #0f172a;
-        }
-        .text-blue {
-            color: #2563eb;
-        }
-        /* Tables */
-        .table-container {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        .table-title {
-            padding: 16px 20px;
-            font-size: 18px;
-            font-weight: 700;
-            border-bottom: 1px solid #e2e8f0;
-            background: #fafafa;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-        }
-        th, td {
-            padding: 14px 20px;
-            font-size: 14px;
-        }
-        th {
-            background-color: #f1f5f9;
-            color: #475569;
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 11px;
-            letter-spacing: 0.5px;
-        }
-        tr {
-            border-bottom: 1px solid #e2e8f0;
-        }
-        tr:last-child {
-            border-bottom: none;
-        }
-        tr:hover {
-            background-color: #f8fafc;
-        }
-        .num-col {
-            text-align: right;
-            font-family: monospace;
-            font-size: 15px;
-        }
-        .badge {
-            background-color: #e0f2fe;
-            color: #0369a1;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-weight: 700;
-        }
-    </style>
+    <title>Yorkshire Water Reservoir Monthly Levels</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-800 min-h-screen font-sans">
 
-    <div class="container">
-        <header>
-            <h1>Yorkshire Water Reservoir Levels</h1>
-            <p style="color: #64748b; margin: 0;">Live database query direct from the ArcGIS Open Data Server</p>
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="mb-8 border-b border-slate-200 pb-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Yorkshire Water Reservoir Levels Dashboard</h1>
+                <p class="text-slate-500 mt-2">Active monthly monitoring compiled via Stream Open Data Portal.</p>
+            </div>
+            <div id="status-badge" class="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 animate-pulse">
+                Connecting to ArcGIS Live Feed...
+            </div>
         </header>
 
-        <!-- Dynamic Status Indicator -->
-        <div id="status-display" class="status-box status-loading">
-            Connecting to ArcGIS and downloading database...
+        <!-- Network-Wide Summary KPI Cards -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+            <!-- Card 1: Total Max Capacity -->
+            <div class="bg-gradient-to-tr from-slate-900 to-slate-800 text-white p-6 rounded-2xl shadow-md">
+                <span class="block text-xs uppercase tracking-wider font-bold text-slate-400">Total Network Capacity</span>
+                <div class="mt-2 flex items-baseline gap-2">
+                    <span id="metric-max-capacity" class="text-3xl font-extrabold">--</span>
+                    <span class="text-sm font-semibold text-slate-300">m³</span>
+                </div>
+                <p class="text-slate-400 text-xs mt-2">Combined maximum capacity of all monitored reservoirs.</p>
+            </div>
+
+            <!-- Card 2: Current Active Reserves -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <span class="block text-xs uppercase tracking-wider font-semibold text-slate-500">Current Total Reserves</span>
+                <div class="mt-2 flex items-baseline gap-2">
+                    <span id="metric-current-volume" class="text-3xl font-extrabold text-slate-900">--</span>
+                    <span class="text-sm font-semibold text-slate-500">m³</span>
+                </div>
+                <p class="text-slate-400 text-xs mt-2">Estimated current storage volume based on latest readings.</p>
+            </div>
+
+            <!-- Card 3: Combined Percentage -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <span class="block text-xs uppercase tracking-wider font-semibold text-slate-500">Overall Reserve Level</span>
+                <div class="mt-2 flex items-baseline gap-2">
+                    <span id="metric-total-percentage" class="text-3xl font-extrabold text-blue-600">--%</span>
+                </div>
+                <!-- Mini Progress Bar -->
+                <div class="w-full bg-slate-100 rounded-full h-2.5 mt-3">
+                    <div id="metric-progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dynamic Selector Panel -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+                <label for="res-selector" class="block text-sm font-semibold text-slate-600 mb-1">Select an Individual Reservoir</label>
+                <select id="res-selector" class="w-full sm:w-72 bg-slate-50 border border-slate-200 text-slate-800 py-2.5 px-4 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold cursor-pointer transition" disabled>
+                    <option>Loading reservoirs...</option>
+                </select>
+            </div>
+            <div class="flex gap-6">
+                <div>
+                    <span class="block text-xs uppercase tracking-wider font-bold text-slate-400">Total Capacity</span>
+                    <span id="capacity-val" class="text-2xl font-bold text-slate-900">-</span> <span class="text-xs text-slate-500 font-semibold">m³</span>
+                </div>
+                <div>
+                    <span class="block text-xs uppercase tracking-wider font-bold text-slate-400">Current Average</span>
+                    <span id="latest-pct" class="text-2xl font-bold text-blue-600">-</span>
+                </div>
+            </div>
         </div>
 
-        <!-- Combined Totals Section -->
-        <div class="summary-grid">
-            <div class="card">
-                <div class="card-title">Combined Max Capacity</div>
-                <div id="total-capacity" class="card-value">--</div>
+        <!-- Dashboard Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-12">
+            <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h3 class="text-lg font-bold text-slate-900 mb-4">Historical Storage Trend (%)</h3>
+                <div class="relative h-96 w-full flex items-center justify-center" id="chart-container">
+                    <div id="chart-loader" class="text-slate-400 text-sm font-semibold">Waiting for telemetry...</div>
+                    <canvas id="reservoirChart" class="hidden w-full h-full"></canvas>
+                </div>
             </div>
-            <div class="card">
-                <div class="card-title">Combined Current Stored</div>
-                <div id="total-current" class="card-value">--</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Combined Percentage</div>
-                <div id="total-percentage" class="card-value text-blue">--%</div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col h-full">
+                <h3 class="text-lg font-bold text-slate-900 mb-4">Monthly Breakdown</h3>
+                <div class="overflow-y-auto flex-1 pr-1 max-h-96">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase">
+                                <th class="pb-3">Month</th>
+                                <th class="pb-3 text-right">Avg Level (m)</th>
+                                <th class="pb-3 text-right">Capacity %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="text-sm font-medium text-slate-600 divide-y divide-slate-50">
+                            <tr>
+                                <td colspan="3" class="py-4 text-center text-slate-400">No active selection</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <!-- Individual Directory List -->
-        <div class="table-container">
-            <div class="table-title">Individual Reservoirs (Largest Capacity First)</div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Reservoir Name</th>
-                        <th class="num-col">Max Capacity (TCM)</th>
-                        <th class="num-col">Current Volume (TCM)</th>
-                        <th class="num-col">Percentage</th>
-                    </tr>
-                </thead>
-                <tbody id="data-rows">
-                    <tr>
-                        <td colspan="4" style="text-align: center; color: #64748b; padding: 30px;">
-                            Waiting for data to fetch...
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+        <!-- Master Directory -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div class="px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+                <h2 class="text-xl font-bold text-slate-900">Yorkshire Water Reservoir Directory</h2>
+                <p class="text-slate-500 text-sm mt-0.5">Comprehensive list of managed reservoirs ordered by largest holding capacity.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-slate-200">
+                            <th class="py-4 px-4">Reservoir Name</th>
+                            <th class="py-4 px-4 text-right">Max Capacity</th>
+                            <th class="py-4 px-4 text-right">Current Level %</th>
+                            <th class="py-4 px-4 text-center">Location Link</th>
+                        </tr>
+                    </thead>
+                    <tbody id="master-directory-rows" class="text-sm font-medium divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="4" class="py-6 text-center text-slate-400">Assembling database records...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
     <script>
-        // Use the explicit FeatureServer layer 0 query endpoint
-        const API_URL = "https://services-eu1.arcgis.com/1WqkK5cDKUbF0CkH/arcgis/rest/services/Yorkshire%20Water%20Reservoir%20Levels%202026/FeatureServer/0/query?where=1%3D1&outFields=RESERVOIR_NAME,DATE,CAPACITY,CURRENT_LEVEL,CURRENT_PERCENTAGE&f=json&resultRecordCount=4000";
+        let reservoirData = {};
+        let chartInstance = null;
 
-        async function fetchAndRenderData() {
-            const statusDisplay = document.getElementById("status-display");
-            
+        const selector = document.getElementById('res-selector');
+        const capacityVal = document.getElementById('capacity-val');
+        const latestPct = document.getElementById('latest-pct');
+        const tableBody = document.getElementById('table-body');
+        const masterDirectoryBody = document.getElementById('master-directory-rows');
+        const ctx = document.getElementById('reservoirChart').getContext('2d');
+
+        // ArcGIS Open Data Parameters[cite: 2]
+        const QUERY_URL = "https://services-eu1.arcgis.com/1WqkK5cDKUbF0CkH/arcgis/rest/services/Yorkshire%20Water%20Reservoir%20Levels%202026/FeatureServer/0/query";
+        const OUT_FIELDS = "RESERVOIR_NAME,DATE,CAPACITY,CURRENT_LEVEL,CURRENT_PERCENTAGE,LATITUDE,LONGITUDE";
+        const LIMIT_PER_REQUEST = 2000;
+
+        // Fallback Mock Data[cite: 2]
+        const MOCK_RECORDS = [
+            {"RESERVOIR_NAME": "GRIMWITH IRE", "DATE": 1768435200000, "CAPACITY": 21764, "CURRENT_LEVEL": 21328, "CURRENT_PERCENTAGE": 98.0, "LATITUDE": 54.076, "LONGITUDE": -1.910},
+            {"RESERVOIR_NAME": "GRIMWITH IRE", "DATE": 1771027200000, "CAPACITY": 21764, "CURRENT_LEVEL": 21111, "CURRENT_PERCENTAGE": 97.0, "LATITUDE": 54.076, "LONGITUDE": -1.910},
+            {"RESERVOIR_NAME": "ECCUP ESR", "DATE": 1768435200000, "CAPACITY": 7009, "CURRENT_LEVEL": 6167, "CURRENT_PERCENTAGE": 88.0, "LATITUDE": 53.871, "LONGITUDE": -1.533},
+            {"RESERVOIR_NAME": "ECCUP ESR", "DATE": 1771027200000, "CAPACITY": 7009, "CURRENT_LEVEL": 6097, "CURRENT_PERCENTAGE": 87.0, "LATITUDE": 53.871, "LONGITUDE": -1.533},
+        ];
+
+        async function fetchReservoirData() {
+            let allFeatures = [];
+            let offset = 0;
+
             try {
-                const response = await fetch(API_URL);
-                if (!response.ok) {
-                    throw new Error(`The server returned an error: HTTP status ${response.status}`);
+                while (true) {
+                    const url = `${QUERY_URL}?where=1%3D1&outFields=${OUT_FIELDS}&f=json&resultOffset=${offset}&resultRecordCount=${LIMIT_PER_REQUEST}`;
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error.message);
+
+                    const features = data.features || [];
+                    if (features.length === 0) break;
+
+                    allFeatures.push(...features.map(f => f.attributes));
+                    if (features.length < LIMIT_PER_REQUEST) break;
+                    offset += features.length;
                 }
 
-                const data = await response.json();
+                if (allFeatures.length === 0) throw new Error("No data returned from telemetry server.");
                 
-                // Catch any explicit error payloads returned by ArcGIS
-                if (data.error) {
-                    throw new Error(`ArcGIS Error [Code ${data.error.code}]: ${data.error.message}`);
-                }
-
-                const features = data.features || [];
-                if (features.length === 0) {
-                    throw new Error("No database records were returned by the service endpoint.");
-                }
-
-                // Process and isolate only the newest record for each reservoir
-                const latestRecordByReservoir = {};
-
-                for (let i = 0; i < features.length; i++) {
-                    const attr = features[i].attributes;
-                    if (!attr) continue;
-
-                    const name = attr.RESERVOIR_NAME;
-                    const date = attr.DATE;
-                    const capacity = Number(attr.CAPACITY || 0);
-                    const currentPct = Number(attr.CURRENT_PERCENTAGE || 0);
-
-                    if (!name) continue;
-
-                    // If we haven't seen this reservoir yet, or if this record is newer, store it
-                    if (!latestRecordByReservoir[name] || date > latestRecordByReservoir[name].date) {
-                        // Calculate current storage volume (capacity * percentage)
-                        const currentVal = capacity * (currentPct / 100);
-                        
-                        latestRecordByReservoir[name] = {
-                            name: name,
-                            date: date,
-                            capacity: capacity,
-                            currentVal: currentVal,
-                            percentage: currentPct
-                        };
-                    }
-                }
-
-                // Convert grouped map to an array and sort descending by Max Capacity
-                const reservoirList = Object.values(latestRecordByReservoir);
-                reservoirList.sort((a, b) => b.capacity - a.capacity);
-
-                if (reservoirList.length === 0) {
-                    throw new Error("Filtered database yielded 0 valid reservoir configurations.");
-                }
-
-                // Calculate global combined metrics
-                let combinedCapacity = 0;
-                let combinedCurrent = 0;
-
-                reservoirList.forEach(res => {
-                    combinedCapacity += res.capacity;
-                    combinedCurrent += res.currentVal;
-                });
-
-                const combinedPercentage = combinedCapacity > 0 ? (combinedCurrent / combinedCapacity) * 100 : 0;
-
-                // Populate Summary KPI Cards (Using standard Thousand Cubic Metre abbreviation TCM)
-                document.getElementById("total-capacity").innerText = Math.round(combinedCapacity).toLocaleString() + " TCM";
-                document.getElementById("total-current").innerText = Math.round(combinedCurrent).toLocaleString() + " TCM";
-                document.getElementById("total-percentage").innerText = combinedPercentage.toFixed(1) + "%";
-
-                // Populate Directory Table rows
-                const tbody = document.getElementById("data-rows");
-                tbody.innerHTML = "";
-
-                reservoirList.forEach(res => {
-                    const tr = document.createElement("tr");
-                    tr.innerHTML = `
-                        <td style="font-weight: 700; color: #0f172a;">${res.name}</td>
-                        <td class="num-col">${Math.round(res.capacity).toLocaleString()}</td>
-                        <td class="num-col">${Math.round(res.currentVal).toLocaleString()}</td>
-                        <td class="num-col"><span class="badge">${res.percentage.toFixed(1)}%</span></td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-
-                // Update Status Display on load complete
-                statusDisplay.innerText = `Data successfully parsed! Compiled ${reservoirList.length} distinct reservoirs from active telemetry records.`;
-                statusDisplay.className = "status-box status-success";
+                updateStatusBadge("Live API Connected", "bg-emerald-100 text-emerald-800");
+                processAndAggregateData(allFeatures);
 
             } catch (err) {
-                console.error(err);
-                statusDisplay.innerText = `Could Not Render Page\n\nReason: ${err.message}\n\nTip: If you opened this page via "file:///", check if your browser blocks local files from fetching external endpoints. Try running a simple local server.`;
-                statusDisplay.className = "status-box status-error";
+                console.warn("API Call Failed. Falling back to local offline simulation. Error: ", err);
+                updateStatusBadge("Offline - Using Mock Data", "bg-rose-100 text-rose-800");
+                processAndAggregateData(MOCK_RECORDS);
             }
         }
 
-        // Run fetch script automatically
-        fetchAndRenderData();
+        function updateStatusBadge(text, bgClass) {
+            const badge = document.getElementById('status-badge');
+            badge.innerText = text;
+            badge.className = `px-3 py-1.5 rounded-full text-xs font-bold ${bgClass}`;
+        }
+
+        function processAndAggregateData(records) {
+            // Normalize columns to lowercase matching the Python script[cite: 2]
+            const df = records.map(r => ({
+                reservoir_name: r.RESERVOIR_NAME || r.reservoir_name,
+                date: new Date(r.DATE || r.date),
+                capacity: Number(r.CAPACITY || r.capacity || 0),
+                current_level: Number(r.CURRENT_LEVEL || r.current_level || 0),
+                current_percentage: Number(r.CURRENT_PERCENTAGE || r.current_percentage || 0),
+                latitude: r.LATITUDE || r.latitude || null,
+                longitude: r.LONGITUDE || r.longitude || null
+            }));
+
+            // Month Formatters
+            const getYearMonth = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+            const getMonthName = d => d.toLocaleDateString([], { month: 'short', year: 'numeric' });
+
+            // 1. Group by Reservoir & Year-Month for historical trend calculations[cite: 2]
+            const historicalGroup = {};
+            df.forEach(row => {
+                const resName = row.reservoir_name;
+                const ym = getYearMonth(row.date);
+                const mName = getMonthName(row.date);
+
+                if (!historicalGroup[resName]) historicalGroup[resName] = {};
+                if (!historicalGroup[resName][ym]) {
+                    historicalGroup[resName][ym] = {
+                        month_name: mName,
+                        levels: [],
+                        percentages: [],
+                        capacity: row.capacity
+                    };
+                }
+                historicalGroup[resName][ym].levels.push(row.current_level);
+                historicalGroup[resName][ym].percentages.push(row.current_percentage);
+            });
+
+            // Flatten and group historical structures[cite: 2]
+            reservoirData = {};
+            Object.keys(historicalGroup).sort().forEach(resName => {
+                const monthsSorted = Object.keys(historicalGroup[resName]).sort();
+                reservoirData[resName] = {
+                    capacity: historicalGroup[resName][monthsSorted[0]].capacity,
+                    months: monthsSorted.map(ym => historicalGroup[resName][ym].month_name),
+                    percentages: monthsSorted.map(ym => {
+                        const arr = historicalGroup[resName][ym].percentages;
+                        return Math.round((arr.reduce((a,b)=>a+b, 0) / arr.length) * 10) / 10;
+                    }),
+                    levels: monthsSorted.map(ym => {
+                        const arr = historicalGroup[resName][ym].levels;
+                        return Math.round((arr.reduce((a,b)=>a+b, 0) / arr.length) * 100) / 100;
+                    })
+                };
+            });
+
+            // 2. Identify the absolute latest record for each unique reservoir[cite: 2]
+            const latestRecordsMap = {};
+            df.forEach(row => {
+                const currentStored = latestRecordsMap[row.reservoir_name];
+                if (!currentStored || row.date > currentStored.date) {
+                    latestRecordsMap[row.reservoir_name] = row;
+                }
+            });
+
+            const latestList = Object.values(latestRecordsMap);
+
+            // Calculate network summary metrics[cite: 2]
+            let totalMaxCapacity = 0;
+            let totalCurrentReserves = 0;
+
+            latestList.forEach(row => {
+                const currentVolume = row.capacity * (row.current_percentage / 100.0);[cite: 2]
+                totalMaxCapacity += row.capacity;
+                totalCurrentReserves += currentVolume;
+            });
+
+            const totalPercentage = totalMaxCapacity > 0 ? (totalCurrentReserves / totalMaxCapacity) * 100 : 0;[cite: 2]
+
+            // Apply Network KPI values to DOM[cite: 2]
+            document.getElementById('metric-max-capacity').innerText = totalMaxCapacity.toLocaleString([], {maximumFractionDigits:0});
+            document.getElementById('metric-current-volume').innerText = totalCurrentReserves.toLocaleString([], {maximumFractionDigits:0});
+            document.getElementById('metric-total-percentage').innerText = totalPercentage.toFixed(1) + '%';
+            document.getElementById('metric-progress-bar').style.width = `${totalPercentage}%`;
+
+            // 3. Build Selector List[cite: 2]
+            selector.innerHTML = '';
+            const sortedReservoirs = Object.keys(reservoirData).sort();[cite: 2]
+            sortedReservoirs.forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                selector.appendChild(opt);
+            });
+            selector.removeAttribute('disabled');
+
+            // 4. Build Master Directory HTML rows ordered by capacity descending[cite: 2]
+            const sortedDirectory = latestList.sort((a,b) => b.capacity - a.capacity);[cite: 2]
+            masterDirectoryBody.innerHTML = '';
+            sortedDirectory.forEach(row => {
+                const cap = row.capacity;
+                const pct = row.current_percentage !== null ? row.current_percentage.toFixed(1) : 'N/A';[cite: 2]
+                const badgeClass = pct < 50 ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700';[cite: 2]
+
+                let mapsLink = '<span class="text-slate-400 italic">No coordinates</span>';[cite: 2]
+                if (row.latitude && row.longitude) {
+                    mapsLink = `<a href="https://www.google.com/maps/search/?api=1&query=${row.latitude},${row.longitude}" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">📍 View Map</a>`;[cite: 2]
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 border-b border-slate-100 transition";[cite: 2]
+                tr.innerHTML = `
+                    <td class="py-3.5 px-4 font-bold text-slate-900">${row.reservoir_name}</td>
+                    <td class="py-3.5 px-4 text-right text-slate-700 font-mono">${cap.toLocaleString()} m³</td>
+                    <td class="py-3.5 px-4 text-right">
+                        <span class="inline-block px-2.5 py-1 text-xs font-bold rounded-full ${badgeClass}">
+                            ${pct}%
+                        </span>
+                    </td>
+                    <td class="py-3.5 px-4 text-center">${mapsLink}</td>
+                `;[cite: 2]
+                masterDirectoryBody.appendChild(tr);
+            });
+
+            // Reveal canvas and trigger setup
+            document.getElementById('chart-loader').classList.add('hidden');
+            document.getElementById('reservoirChart').classList.remove('hidden');
+
+            if (sortedReservoirs.length > 0) {
+                updateDashboard(sortedReservoirs[0]);[cite: 2]
+            }
+        }
+
+        function updateDashboard(resName) {
+            const data = reservoirData[resName];[cite: 2]
+            capacityVal.textContent = Number(data.capacity).toLocaleString();[cite: 2]
+            
+            const lastPercentage = data.percentages[data.percentages.length - 1];[cite: 2]
+            latestPct.textContent = lastPercentage ? lastPercentage + '%' : 'N/A';[cite: 2]
+
+            if (chartInstance) {
+                chartInstance.destroy();[cite: 2]
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.months,[cite: 2]
+                    datasets: [{
+                        label: 'Water Capacity %',
+                        data: data.percentages,[cite: 2]
+                        borderColor: '#2563eb',[cite: 2]
+                        backgroundColor: 'rgba(37, 99, 235, 0.08)',[cite: 2]
+                        fill: true,[cite: 2]
+                        tension: 0.35,[cite: 2]
+                        borderWidth: 3,[cite: 2]
+                        pointRadius: 4,[cite: 2]
+                        pointHoverRadius: 7,[cite: 2]
+                    }]
+                },
+                options: {
+                    responsive: true,[cite: 2]
+                    maintainAspectRatio: false,[cite: 2]
+                    plugins: {
+                        legend: { display: false },[cite: 2]
+                        tooltip: {
+                            padding: 12,[cite: 2]
+                            backgroundColor: '#1e293b',[cite: 2]
+                            titleFont: { size: 14, weight: 'bold' },[cite: 2]
+                            bodyFont: { size: 13 }[cite: 2]
+                        }
+                    },
+                    scales: {
+                        y: {
+                            min: 0,[cite: 2]
+                            max: 100,[cite: 2]
+                            ticks: { callback: value => value + '%' },[cite: 2]
+                            grid: { color: '#f1f5f9' }[cite: 2]
+                        },
+                        x: {
+                            grid: { display: false }[cite: 2]
+                        }
+                    }
+                }
+            });
+
+            tableBody.innerHTML = '';[cite: 2]
+            for (let i = data.months.length - 1; i >= 0; i--) {[cite: 2]
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition-colors';[cite: 2]
+                tr.innerHTML = `
+                    <td class="py-3 font-semibold text-slate-800">${data.months[i]}</td>
+                    <td class="py-3 text-right text-slate-500">${data.levels[i] !== null ? data.levels[i] + 'm' : 'N/A'}</td>
+                    <td class="py-3 text-right font-bold text-blue-600">${data.percentages[i]}%</td>
+                `;[cite: 2]
+                tableBody.appendChild(tr);[cite: 2]
+            }
+        }
+
+        selector.addEventListener('change', (e) => updateDashboard(e.target.value));[cite: 2]
+
+        // Initialize script
+        fetchReservoirData();
     </script>
 </body>
 </html>
