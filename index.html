@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yorkshire Water Reservoirs</title>
+    <style>
+        /* Modern, lightweight default styling */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            margin: 0;
+            padding: 24px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        header {
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+        h1 {
+            margin: 0 0 6px 0;
+            font-size: 26px;
+            color: #0f172a;
+        }
+        .status-box {
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+        .status-loading {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+        }
+        .status-success {
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+        .status-error {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+            white-space: pre-wrap;
+        }
+        /* Summary/KPI Cards */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .card-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: #64748b;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+        .card-value {
+            font-size: 28px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+        .text-blue {
+            color: #2563eb;
+        }
+        /* Tables */
+        .table-container {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .table-title {
+            padding: 16px 20px;
+            font-size: 18px;
+            font-weight: 700;
+            border-bottom: 1px solid #e2e8f0;
+            background: #fafafa;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        th, td {
+            padding: 14px 20px;
+            font-size: 14px;
+        }
+        th {
+            background-color: #f1f5f9;
+            color: #475569;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+        }
+        tr {
+            border-bottom: 1px solid #e2e8f0;
+        }
+        tr:last-child {
+            border-bottom: none;
+        }
+        tr:hover {
+            background-color: #f8fafc;
+        }
+        .num-col {
+            text-align: right;
+            font-family: monospace;
+            font-size: 15px;
+        }
+        .badge {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Yorkshire Water Reservoir Levels</h1>
+            <p style="color: #64748b; margin: 0;">Live database query direct from the ArcGIS Open Data Server</p>
+        </header>
+
+        <!-- Dynamic Status Indicator -->
+        <div id="status-display" class="status-box status-loading">
+            Connecting to ArcGIS and downloading database...
+        </div>
+
+        <!-- Combined Totals Section -->
+        <div class="summary-grid">
+            <div class="card">
+                <div class="card-title">Combined Max Capacity</div>
+                <div id="total-capacity" class="card-value">--</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Combined Current Stored</div>
+                <div id="total-current" class="card-value">--</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Combined Percentage</div>
+                <div id="total-percentage" class="card-value text-blue">--%</div>
+            </div>
+        </div>
+
+        <!-- Individual Directory List -->
+        <div class="table-container">
+            <div class="table-title">Individual Reservoirs (Largest Capacity First)</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Reservoir Name</th>
+                        <th class="num-col">Max Capacity (TCM)</th>
+                        <th class="num-col">Current Volume (TCM)</th>
+                        <th class="num-col">Percentage</th>
+                    </tr>
+                </thead>
+                <tbody id="data-rows">
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: #64748b; padding: 30px;">
+                            Waiting for data to fetch...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Use the explicit FeatureServer layer 0 query endpoint
+        const API_URL = "https://services-eu1.arcgis.com/1WqkK5cDKUbF0CkH/arcgis/rest/services/Yorkshire%20Water%20Reservoir%20Levels%202026/FeatureServer/0/query?where=1%3D1&outFields=RESERVOIR_NAME,DATE,CAPACITY,CURRENT_LEVEL,CURRENT_PERCENTAGE&f=json&resultRecordCount=4000";
+
+        async function fetchAndRenderData() {
+            const statusDisplay = document.getElementById("status-display");
+            
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) {
+                    throw new Error(`The server returned an error: HTTP status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Catch any explicit error payloads returned by ArcGIS
+                if (data.error) {
+                    throw new Error(`ArcGIS Error [Code ${data.error.code}]: ${data.error.message}`);
+                }
+
+                const features = data.features || [];
+                if (features.length === 0) {
+                    throw new Error("No database records were returned by the service endpoint.");
+                }
+
+                // Process and isolate only the newest record for each reservoir
+                const latestRecordByReservoir = {};
+
+                for (let i = 0; i < features.length; i++) {
+                    const attr = features[i].attributes;
+                    if (!attr) continue;
+
+                    const name = attr.RESERVOIR_NAME;
+                    const date = attr.DATE;
+                    const capacity = Number(attr.CAPACITY || 0);
+                    const currentPct = Number(attr.CURRENT_PERCENTAGE || 0);
+
+                    if (!name) continue;
+
+                    // If we haven't seen this reservoir yet, or if this record is newer, store it
+                    if (!latestRecordByReservoir[name] || date > latestRecordByReservoir[name].date) {
+                        // Calculate current storage volume (capacity * percentage)
+                        const currentVal = capacity * (currentPct / 100);
+                        
+                        latestRecordByReservoir[name] = {
+                            name: name,
+                            date: date,
+                            capacity: capacity,
+                            currentVal: currentVal,
+                            percentage: currentPct
+                        };
+                    }
+                }
+
+                // Convert grouped map to an array and sort descending by Max Capacity
+                const reservoirList = Object.values(latestRecordByReservoir);
+                reservoirList.sort((a, b) => b.capacity - a.capacity);
+
+                if (reservoirList.length === 0) {
+                    throw new Error("Filtered database yielded 0 valid reservoir configurations.");
+                }
+
+                // Calculate global combined metrics
+                let combinedCapacity = 0;
+                let combinedCurrent = 0;
+
+                reservoirList.forEach(res => {
+                    combinedCapacity += res.capacity;
+                    combinedCurrent += res.currentVal;
+                });
+
+                const combinedPercentage = combinedCapacity > 0 ? (combinedCurrent / combinedCapacity) * 100 : 0;
+
+                // Populate Summary KPI Cards (Using standard Thousand Cubic Metre abbreviation TCM)
+                document.getElementById("total-capacity").innerText = Math.round(combinedCapacity).toLocaleString() + " TCM";
+                document.getElementById("total-current").innerText = Math.round(combinedCurrent).toLocaleString() + " TCM";
+                document.getElementById("total-percentage").innerText = combinedPercentage.toFixed(1) + "%";
+
+                // Populate Directory Table rows
+                const tbody = document.getElementById("data-rows");
+                tbody.innerHTML = "";
+
+                reservoirList.forEach(res => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td style="font-weight: 700; color: #0f172a;">${res.name}</td>
+                        <td class="num-col">${Math.round(res.capacity).toLocaleString()}</td>
+                        <td class="num-col">${Math.round(res.currentVal).toLocaleString()}</td>
+                        <td class="num-col"><span class="badge">${res.percentage.toFixed(1)}%</span></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // Update Status Display on load complete
+                statusDisplay.innerText = `Data successfully parsed! Compiled ${reservoirList.length} distinct reservoirs from active telemetry records.`;
+                statusDisplay.className = "status-box status-success";
+
+            } catch (err) {
+                console.error(err);
+                statusDisplay.innerText = `Could Not Render Page\n\nReason: ${err.message}\n\nTip: If you opened this page via "file:///", check if your browser blocks local files from fetching external endpoints. Try running a simple local server.`;
+                statusDisplay.className = "status-box status-error";
+            }
+        }
+
+        // Run fetch script automatically
+        fetchAndRenderData();
+    </script>
+</body>
+</html>
